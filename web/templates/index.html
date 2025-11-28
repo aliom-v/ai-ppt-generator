@@ -1,0 +1,1845 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI PPT 生成器 - 智能创作，一键生成</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        :root {
+            --primary: #06b6d4;
+            --primary-dark: #0891b2;
+            --primary-light: #22d3ee;
+            --secondary: #a855f7;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --dark: #0f172a;
+            --light: #f8fafc;
+            --gray: #94a3b8;
+            --border: rgba(255, 255, 255, 0.1);
+            --glass-bg: rgba(255, 255, 255, 0.1);
+            --glass-border: rgba(255, 255, 255, 0.2);
+            --shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2);
+            --shadow-lg: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            --glow: 0 0 20px rgba(6, 182, 212, 0.5);
+            
+            /* 亮色模式变量 */
+            --bg-primary: #f8fafc;
+            --bg-secondary: #ffffff;
+            --bg-tertiary: #f8fafc;
+            --text-primary: #0f172a;
+            --text-secondary: #475569;
+            --text-tertiary: #64748b;
+            --border-color: #e2e8f0;
+            --card-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            --card-hover-shadow: 0 20px 40px rgba(0, 0, 0, 0.12);
+        }
+        
+        [data-theme="dark"] {
+            --primary: #ec4899;
+            --primary-dark: #db2777;
+            --primary-light: #f472b6;
+            --secondary: #f97316;
+            
+            /* 暗色模式变量 - 更深更协调 */
+            --bg-primary: #0a0f1e;
+            --bg-secondary: #1a2332;
+            --bg-tertiary: #0f1729;
+            --text-primary: #f1f5f9;
+            --text-secondary: #cbd5e1;
+            --text-tertiary: #94a3b8;
+            --border-color: #2d3748;
+            --card-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+            --card-hover-shadow: 0 20px 40px rgba(0, 0, 0, 0.7);
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            min-height: 100vh;
+            padding: 40px 20px;
+            position: relative;
+            overflow-x: hidden;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+        
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 10;
+        }
+        
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 50px;
+            animation: fadeInDown 0.8s ease-out;
+        }
+        
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .header h1 {
+            font-size: 3.5em;
+            font-weight: 800;
+            margin-bottom: 15px;
+            color: var(--text-primary);
+            letter-spacing: 0.02em;
+        }
+        
+        .header .subtitle {
+            font-size: 1.3em;
+            color: var(--text-secondary);
+            font-weight: 400;
+            margin-bottom: 20px;
+        }
+        
+        .header .features {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-top: 25px;
+            flex-wrap: wrap;
+        }
+        
+        .header .feature-tag {
+            background: var(--bg-secondary);
+            padding: 10px 24px;
+            border-radius: 24px;
+            font-size: 0.9em;
+            font-weight: 500;
+            border: 1px solid var(--border-color);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            color: var(--text-secondary);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+        
+        .header .feature-tag:hover {
+            background: var(--bg-secondary);
+            transform: translateY(-3px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+        
+        .card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 28px;
+            padding: 45px;
+            box-shadow: var(--card-shadow);
+            margin-bottom: 30px;
+            animation: fadeInUp 0.8s ease-out 0.2s both;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            z-index: 10;
+        }
+        
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(40px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .card:hover {
+            transform: translateY(-8px);
+            box-shadow: var(--card-hover-shadow);
+            border-color: var(--primary);
+        }
+        
+        .form-group {
+            margin-bottom: 28px;
+            animation: fadeIn 0.5s ease-out;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 12px;
+            font-weight: 600;
+            color: var(--text-primary);
+            font-size: 0.95em;
+            letter-spacing: 0.02em;
+        }
+        
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 16px 20px;
+            border: 2px solid var(--border-color);
+            border-radius: 14px;
+            font-size: 16px;
+            font-family: inherit;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+        
+        .form-group textarea {
+            resize: vertical;
+            min-height: 120px;
+            line-height: 1.6;
+        }
+        
+        .form-group input::placeholder,
+        .form-group textarea::placeholder {
+            color: var(--text-tertiary);
+        }
+        
+        .form-group input:hover,
+        .form-group select:hover,
+        .form-group textarea:hover {
+            background: var(--bg-secondary);
+            border-color: var(--text-tertiary);
+        }
+        
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+            background: var(--bg-secondary);
+            box-shadow: 0 0 0 4px rgba(6, 182, 212, 0.1);
+            transform: translateY(-2px);
+        }
+        
+        .form-group small {
+            display: block;
+            margin-top: 8px;
+            color: var(--text-tertiary);
+            font-size: 0.85em;
+        }
+        
+        /* 文件上传样式 */
+        .file-upload-wrapper {
+            display: flex;
+            gap: 12px;
+            align-items: stretch;
+        }
+        
+        .file-upload-label {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            padding: 16px 20px;
+            background: var(--bg-tertiary);
+            border: 2px dashed var(--border-color);
+            border-radius: 14px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            color: var(--text-secondary);
+            font-size: 15px;
+        }
+        
+        .file-upload-label:hover {
+            border-color: var(--primary);
+            background: var(--bg-secondary);
+            color: var(--primary);
+        }
+        
+        .file-upload-label svg {
+            transition: transform 0.3s ease;
+        }
+        
+        .file-upload-label:hover svg {
+            transform: translateY(-2px);
+        }
+        
+        .file-input {
+            display: none;
+        }
+        
+        .file-upload-label.has-file {
+            border-style: solid;
+            border-color: var(--success);
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success);
+        }
+        
+        .file-info {
+            display: none;
+            margin-top: 12px;
+            padding: 12px 16px;
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid var(--success);
+            border-radius: 10px;
+            font-size: 0.9em;
+        }
+        
+        .file-info.show {
+            display: block;
+            animation: slideDown 0.3s ease;
+        }
+        
+        .file-info-success {
+            color: var(--success);
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+        
+        .file-info-details {
+            color: var(--text-secondary);
+        }
+        
+        /* 页数模式切换样式 */
+        .page-mode-toggle {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        
+        .toggle-option {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 16px;
+            background: var(--bg-tertiary);
+            border: 2px solid var(--border-color);
+            border-radius: 14px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin: 0;
+        }
+        
+        .toggle-option:hover {
+            border-color: var(--primary);
+            background: var(--bg-secondary);
+            transform: translateY(-2px);
+        }
+        
+        .toggle-radio {
+            position: relative;
+            flex-shrink: 0;
+        }
+        
+        .toggle-radio input[type="radio"] {
+            position: absolute;
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .radio-custom {
+            display: block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--border-color);
+            border-radius: 50%;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+        
+        .radio-custom::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0);
+            width: 10px;
+            height: 10px;
+            background: var(--primary);
+            border-radius: 50%;
+            opacity: 0;
+            transition: all 0.3s ease;
+        }
+        
+        .toggle-radio input[type="radio"]:checked + .radio-custom {
+            border-color: var(--primary);
+        }
+        
+        .toggle-radio input[type="radio"]:checked + .radio-custom::after {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
+        }
+        
+        .toggle-option:has(input[type="radio"]:checked) {
+            border-color: var(--primary);
+            background: var(--bg-secondary);
+        }
+        
+        .toggle-option:has(input[type="radio"]:checked) .toggle-title {
+            color: var(--primary);
+        }
+        
+        .toggle-content {
+            flex: 1;
+        }
+        
+        .toggle-title {
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+            transition: color 0.3s ease;
+        }
+        
+        .toggle-description {
+            font-size: 0.85em;
+            color: var(--text-tertiary);
+            line-height: 1.4;
+        }
+        
+        .manual-page-count {
+            padding: 16px;
+            background: var(--bg-tertiary);
+            border-radius: 14px;
+            border: 2px solid var(--border-color);
+            transition: all 0.3s ease;
+        }
+        
+        .manual-page-count.disabled {
+            opacity: 0.5;
+            pointer-events: none;
+        }
+        
+        .manual-page-count input {
+            width: 120px;
+            padding: 12px 16px;
+            border: 2px solid var(--border-color);
+            border-radius: 10px;
+            font-size: 16px;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            transition: all 0.3s ease;
+        }
+        
+        .manual-page-count input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.1);
+        }
+        
+        .manual-page-count small {
+            display: block;
+            margin-top: 8px;
+            margin-left: 0;
+        }
+        
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 18px;
+            background: var(--bg-tertiary);
+            border-radius: 14px;
+            border: 2px solid var(--border-color);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .checkbox-group:hover {
+            border-color: var(--primary);
+            background: var(--bg-secondary);
+            transform: translateY(-1px);
+        }
+        
+        .checkbox-group input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+            accent-color: #ec4899;
+        }
+        
+        .checkbox-group label {
+            margin: 0 !important;
+            cursor: pointer;
+            user-select: none;
+            color: var(--text-secondary);
+        }
+        
+        .btn {
+            padding: 16px 32px;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: inherit;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .btn-primary {
+            background: #f9a8d4;
+            color: white;
+            width: 100%;
+            box-shadow: 0 2px 8px rgba(249, 168, 212, 0.3);
+        }
+        
+        .btn-primary:hover {
+            background: #f472b6;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(244, 114, 182, 0.4);
+        }
+        
+        .btn-primary:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 6px rgba(244, 114, 182, 0.3);
+        }
+        
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .btn-secondary {
+            background: var(--bg-secondary);
+            color: var(--text-secondary);
+            border: 2px solid var(--border-color);
+            margin-right: 12px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+        
+        .btn-secondary:hover:not(:disabled) {
+            background: var(--bg-secondary);
+            border-color: var(--primary);
+            color: var(--primary);
+            transform: translateY(-3px) scale(1.02);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+        }
+        
+        .btn-secondary:active:not(:disabled) {
+            transform: translateY(-1px) scale(0.98);
+        }
+        
+        .btn-secondary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .btn-secondary svg {
+            transition: transform 0.3s ease;
+        }
+        
+        .btn-secondary:hover:not(:disabled) svg {
+            transform: scale(1.1);
+        }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 40px;
+            animation: fadeIn 0.3s ease-out;
+        }
+        
+        .loading.active {
+            display: block;
+        }
+        
+        .spinner {
+            width: 60px;
+            height: 60px;
+            margin: 0 auto 20px;
+            position: relative;
+        }
+        
+        .spinner::before,
+        .spinner::after {
+            content: '';
+            position: absolute;
+            border-radius: 50%;
+        }
+        
+        .spinner::before {
+            width: 100%;
+            height: 100%;
+            border: 4px solid var(--border);
+        }
+        
+        .spinner::after {
+            width: 100%;
+            height: 100%;
+            border: 4px solid transparent;
+            border-top-color: var(--primary);
+            border-right-color: var(--primary);
+            animation: spin 0.8s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .loading p {
+            color: var(--text-secondary);
+            font-size: 1.1em;
+            font-weight: 500;
+        }
+        
+        .result {
+            display: none;
+            animation: fadeInUp 0.5s ease-out;
+        }
+        
+        .result.active {
+            display: block;
+        }
+        
+        .success-message {
+            background: #d1fae5;
+            border: 1px solid #10b981;
+            color: #065f46;
+            padding: 28px;
+            border-radius: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.1);
+        }
+        
+        .success-message h3 {
+            margin-bottom: 18px;
+            font-size: 1.4em;
+            color: #065f46;
+        }
+        
+        .success-message p {
+            margin: 10px 0;
+            font-size: 1.05em;
+            color: #047857;
+        }
+        
+        .success-message strong {
+            color: #065f46;
+        }
+        
+        [data-theme="dark"] .success-message {
+            background: rgba(16, 185, 129, 0.15);
+            border-color: rgba(16, 185, 129, 0.4);
+            color: #34d399;
+        }
+        
+        [data-theme="dark"] .success-message h3 {
+            color: #10b981;
+        }
+        
+        [data-theme="dark"] .success-message p {
+            color: #6ee7b7;
+        }
+        
+        [data-theme="dark"] .success-message strong {
+            color: #10b981;
+        }
+        
+        .error-message {
+            background: #fee2e2;
+            border: 1px solid #ef4444;
+            color: #991b1b;
+            padding: 28px;
+            border-radius: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.1);
+        }
+        
+        .error-message h3 {
+            margin-bottom: 12px;
+            font-size: 1.4em;
+            color: #991b1b;
+        }
+        
+        [data-theme="dark"] .error-message {
+            background: rgba(239, 68, 68, 0.15);
+            border-color: rgba(239, 68, 68, 0.4);
+            color: #fca5a5;
+        }
+        
+        [data-theme="dark"] .error-message h3 {
+            color: #ef4444;
+        }
+        
+        .preview {
+            margin-top: 30px;
+            animation: fadeIn 0.5s ease-out;
+        }
+        
+        .preview h3 {
+            color: var(--text-primary);
+            margin-bottom: 24px;
+            font-size: 1.6em;
+            font-weight: 700;
+        }
+        
+        .slide-preview {
+            background: var(--bg-tertiary);
+            border-left: 4px solid var(--primary);
+            padding: 22px;
+            margin-bottom: 18px;
+            border-radius: 16px;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+            border: 1px solid var(--border-color);
+        }
+        
+        .slide-preview:hover {
+            transform: translateX(8px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+            background: var(--bg-secondary);
+        }
+        
+        .slide-preview h4 {
+            color: var(--text-primary);
+            margin-bottom: 14px;
+            font-size: 1.15em;
+        }
+        
+        .slide-preview .slide-type {
+            display: inline-block;
+            background: linear-gradient(135deg, #ec4899 0%, #f97316 100%);
+            color: white;
+            padding: 6px 14px;
+            border-radius: 18px;
+            font-size: 0.85em;
+            margin-bottom: 12px;
+            font-weight: 500;
+            box-shadow: 0 2px 8px rgba(236, 72, 153, 0.3);
+        }
+        
+        .slide-preview ul {
+            margin-left: 20px;
+            margin-top: 14px;
+        }
+        
+        .slide-preview li {
+            margin-bottom: 10px;
+            color: var(--text-secondary);
+            line-height: 1.7;
+        }
+        
+        .config-status {
+            background: #fef3c7;
+            border: 1px solid #fbbf24;
+            padding: 22px;
+            border-radius: 18px;
+            margin-bottom: 28px;
+            box-shadow: 0 2px 8px rgba(245, 158, 11, 0.1);
+            transition: all 0.3s ease;
+        }
+        
+        .config-status:hover {
+            box-shadow: 0 4px 12px rgba(245, 158, 11, 0.15);
+        }
+        
+        .config-status.success {
+            background: #d1fae5;
+            border-color: #10b981;
+            box-shadow: 0 2px 8px rgba(16, 185, 129, 0.1);
+        }
+        
+        .config-status.success:hover {
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);
+        }
+        
+        .config-status strong {
+            font-size: 1.1em;
+            display: block;
+            margin-bottom: 12px;
+            color: #78350f;
+        }
+        
+        .config-status ul {
+            color: #92400e;
+        }
+        
+        .config-status.success strong {
+            color: #065f46;
+        }
+        
+        .config-status.success ul {
+            color: #047857;
+        }
+        
+        /* 暗色模式下的配置状态 */
+        [data-theme="dark"] .config-status {
+            background: rgba(251, 191, 36, 0.15);
+            border-color: rgba(251, 191, 36, 0.3);
+        }
+        
+        [data-theme="dark"] .config-status strong {
+            color: #fbbf24;
+        }
+        
+        [data-theme="dark"] .config-status ul {
+            color: #fcd34d;
+        }
+        
+        [data-theme="dark"] .config-status.success {
+            background: rgba(16, 185, 129, 0.15);
+            border-color: rgba(16, 185, 129, 0.3);
+        }
+        
+        [data-theme="dark"] .config-status.success strong {
+            color: #10b981;
+        }
+        
+        [data-theme="dark"] .config-status.success ul {
+            color: #34d399;
+        }
+        
+        .footer {
+            text-align: center;
+            color: var(--text-tertiary);
+            margin-top: 60px;
+            font-size: 0.95em;
+            animation: fadeIn 1s ease-out 0.5s both;
+        }
+        
+        /* 暗色模式切换按钮 */
+        .theme-toggle {
+            position: fixed;
+            top: 30px;
+            right: 30px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: var(--bg-secondary);
+            border: 2px solid var(--border-color);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.8em;
+            transition: all 0.3s ease;
+            box-shadow: var(--card-shadow);
+            z-index: 1000;
+        }
+        
+        .theme-toggle:hover {
+            transform: scale(1.15) rotate(20deg);
+            box-shadow: var(--card-hover-shadow);
+            border-color: #ec4899;
+            background: linear-gradient(135deg, rgba(236, 72, 153, 0.2), rgba(249, 115, 22, 0.2));
+        }
+        
+        .theme-toggle:active {
+            transform: scale(0.95) rotate(0deg);
+        }
+        
+        /* 暗色模式下的链接样式 */
+        [data-theme="dark"] a {
+            color: #ec4899;
+        }
+        
+        [data-theme="dark"] a:hover {
+            color: #f472b6;
+        }
+        
+        /* 暗色模式下的选择框选项 */
+        [data-theme="dark"] select option {
+            background: #1a2332;
+            color: #f1f5f9;
+        }
+        
+        /* 暗色模式下的滚动条 */
+        [data-theme="dark"] ::-webkit-scrollbar {
+            width: 12px;
+            height: 12px;
+        }
+        
+        [data-theme="dark"] ::-webkit-scrollbar-track {
+            background: #0a0f1e;
+        }
+        
+        [data-theme="dark"] ::-webkit-scrollbar-thumb {
+            background: #2d3748;
+            border-radius: 6px;
+        }
+        
+        [data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+            background: #3d4758;
+        }
+        
+        /* 弹窗样式 */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(5px);
+            animation: fadeIn 0.3s ease-out;
+        }
+        
+        .modal.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal-content {
+            background: var(--bg-secondary);
+            border-radius: 20px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            animation: slideUp 0.3s ease-out;
+        }
+        
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .modal-header {
+            padding: 25px 30px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .modal-header h2 {
+            margin: 0;
+            color: var(--text-primary);
+            font-size: 1.5em;
+        }
+        
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 2em;
+            color: var(--text-tertiary);
+            cursor: pointer;
+            padding: 0;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: all 0.3s ease;
+        }
+        
+        .close-btn:hover {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+        
+        .modal-body {
+            padding: 30px;
+        }
+        
+        .settings-section {
+            margin-bottom: 30px;
+        }
+        
+        .settings-section h3 {
+            color: var(--text-primary);
+            font-size: 1.2em;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid var(--border-color);
+        }
+        
+        .modal-footer {
+            padding: 20px 30px;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+        }
+        
+        .modal-footer .btn {
+            width: auto;
+        }
+        
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 2.5em;
+            }
+            
+            .header .features {
+                gap: 15px;
+            }
+            
+            .card {
+                padding: 25px;
+            }
+            
+            .btn {
+                padding: 14px 24px;
+            }
+            
+            .modal-content {
+                width: 95%;
+                max-height: 95vh;
+            }
+            
+            .modal-header,
+            .modal-body,
+            .modal-footer {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- 暗色模式切换按钮 -->
+    <button class="theme-toggle" onclick="toggleTheme()" title="切换主题">
+        <span id="themeIcon">🌙</span>
+    </button>
+    
+    <div class="container">
+        <div class="header">
+            <h1>AI PPT 生成器</h1>
+            <p class="subtitle">输入主题，AI 自动生成专业 PPT</p>
+            <div class="features">
+                <span class="feature-tag">AI 智能生成</span>
+                <span class="feature-tag">自动配图</span>
+                <span class="feature-tag">一键下载</span>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div id="configStatus" class="config-status" style="display: none;">
+                <strong>配置状态</strong>
+                <div id="configDetails"></div>
+            </div>
+            
+            <form id="generateForm">
+                <div class="form-group">
+                    <label for="topic">PPT 主题 *</label>
+                    <input type="text" id="topic" name="topic" placeholder="例如：AI 技术发展趋势" required>
+                    <small>输入你想要生成的 PPT 主题</small>
+                </div>
+                
+                <div class="form-group">
+                    <label for="description">详细描述（可选）</label>
+                    <textarea id="description" name="description" rows="5" placeholder="可以输入要点、大纲或粘贴参考资料"></textarea>
+                    <small>提供更多细节，让 AI 生成更精准的内容</small>
+                </div>
+                
+                <div class="form-group">
+                    <label for="file">或上传参考资料</label>
+                    <div class="file-upload-wrapper">
+                        <label for="file" class="file-upload-label">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="17 8 12 3 7 8"></polyline>
+                                <line x1="12" y1="3" x2="12" y2="15"></line>
+                            </svg>
+                            <span id="fileLabel">选择文件或拖拽到此处</span>
+                        </label>
+                        <input type="file" id="file" name="file" accept=".txt,.md,.docx,.pdf" class="file-input">
+                        <button type="button" class="btn btn-secondary" onclick="uploadFile()" id="uploadBtn" disabled>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                            解析文件
+                        </button>
+                    </div>
+                    <small>支持 TXT、MD、DOCX、PDF，最大 5 MB</small>
+                    <div id="fileInfo" class="file-info">
+                        <div class="file-info-success">✓ 文件解析成功</div>
+                        <div class="file-info-details">
+                            <span id="fileLength"></span> 字 | 
+                            <span id="fileLines"></span> 行 | 
+                            约 <span id="fileTokens"></span> tokens
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label>页数设置</label>
+                    <div class="page-mode-toggle">
+                        <label class="toggle-option" for="pageMode-manual">
+                            <div class="toggle-radio">
+                                <input type="radio" name="pageMode" value="manual" id="pageMode-manual" checked>
+                                <span class="radio-custom"></span>
+                            </div>
+                            <div class="toggle-content">
+                                <div class="toggle-title">手动指定页数</div>
+                                <div class="toggle-description">自己决定生成多少页</div>
+                            </div>
+                        </label>
+                        <label class="toggle-option" for="pageMode-auto">
+                            <div class="toggle-radio">
+                                <input type="radio" name="pageMode" value="auto" id="pageMode-auto">
+                                <span class="radio-custom"></span>
+                            </div>
+                            <div class="toggle-content">
+                                <div class="toggle-title">AI 智能判断</div>
+                                <div class="toggle-description">让 AI 决定最佳页数（5-20 页）</div>
+                            </div>
+                        </label>
+                    </div>
+                    <div id="manualPageCount" class="manual-page-count">
+                        <input type="number" id="pageCount" name="pageCount" value="5" min="1" max="100" placeholder="输入页数">
+                        <small>不包括封面页，建议 5-10 页</small>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="template">选择模板 ✨</label>
+                    <select id="template" name="template">
+                        <option value="">默认样式</option>
+                        <!-- 模板列表将动态加载 -->
+                    </select>
+                    <small id="templateHint">选择一个模板样式，让 PPT 更美观</small>
+                </div>
+                
+                <div class="form-group">
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="autoDownload" name="autoDownload" disabled>
+                        <label for="autoDownload" style="margin-bottom: 0;">自动搜索下载图片</label>
+                    </div>
+                    <small id="autoDownloadHint">需要配置 Unsplash API Key</small>
+                </div>
+                
+                <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border-color);">
+                    <button type="button" class="btn btn-secondary" onclick="openSettings()" style="width: 100%; margin: 0;">
+                        配置设置
+                    </button>
+                </div>
+                
+                <div style="display: flex; gap: 12px; margin-top: 10px;">
+                    <button type="button" class="btn btn-secondary" onclick="previewStructure()">
+                        预览结构
+                    </button>
+                    <button type="submit" class="btn btn-primary" style="flex: 1;">
+                        生成 PPT
+                    </button>
+                </div>
+            </form>
+            
+            <div id="loading" class="loading">
+                <div class="spinner"></div>
+                <p id="loadingText">AI 正在生成 PPT，请稍候...</p>
+                <p style="color: var(--gray); font-size: 0.9em; margin-top: 10px;">这通常需要 5-10 秒</p>
+            </div>
+            
+            <div id="result" class="result"></div>
+            
+            <div id="preview" class="preview" style="display: none;">
+                <h3>内容预览</h3>
+                <div id="previewContent"></div>
+            </div>
+        </div>
+        
+        <!-- 配置弹窗 -->
+        <div id="settingsModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>配置设置</h2>
+                    <button class="close-btn" onclick="closeSettings()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="settings-section">
+                        <h3>AI 模型配置</h3>
+                        <div class="form-group">
+                            <label for="apiKey">API Key</label>
+                            <input type="password" id="apiKey" placeholder="输入你的 API Key">
+                            <small>支持 OpenAI、Claude、国内大模型等</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="apiBase">API Base URL</label>
+                            <input type="text" id="apiBase" placeholder="https://api.openai.com/v1">
+                            <small>API 端点地址</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="modelName">模型名称</label>
+                            <input type="text" id="modelName" placeholder="gpt-4o-mini" value="gpt-4o-mini">
+                            <small>如 gpt-4o-mini, claude-3-5-sonnet, qwen-plus 等</small>
+                        </div>
+                    </div>
+                    
+                    <div class="settings-section">
+                        <h3>图片搜索配置</h3>
+                        <div class="form-group">
+                            <label for="unsplashKey">Unsplash Access Key</label>
+                            <input type="password" id="unsplashKey" placeholder="输入 Unsplash API Key">
+                            <small>获取免费 API Key: <a href="https://unsplash.com/developers" target="_blank">unsplash.com/developers</a></small>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="closeSettings()">取消</button>
+                    <button class="btn btn-secondary" onclick="testConnection()" id="testBtn">🔗 测试连接</button>
+                    <button class="btn btn-primary" onclick="saveSettings()">保存配置</button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>Powered by AI | 支持多种页面类型 | 自动图片搜索</p>
+        </div>
+    </div>
+    
+    <script>
+        // 暗色模式切换
+        function toggleTheme() {
+            const html = document.documentElement;
+            const currentTheme = html.getAttribute('data-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            
+            html.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+            
+            // 更新图标
+            const icon = document.getElementById('themeIcon');
+            icon.textContent = newTheme === 'dark' ? '☀️' : '🌙';
+        }
+        
+        // 页面加载时应用保存的主题
+        function loadTheme() {
+            const savedTheme = localStorage.getItem('theme') || 'light';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+            
+            const icon = document.getElementById('themeIcon');
+            icon.textContent = savedTheme === 'dark' ? '☀️' : '🌙';
+        }
+        
+        // 立即加载主题
+        loadTheme();
+        
+        // 加载保存的配置
+        function loadSettings() {
+            const settings = JSON.parse(localStorage.getItem('pptSettings') || '{}');
+            if (settings.apiKey) document.getElementById('apiKey').value = settings.apiKey;
+            if (settings.apiBase) document.getElementById('apiBase').value = settings.apiBase;
+            if (settings.modelName) document.getElementById('modelName').value = settings.modelName;
+            if (settings.unsplashKey) document.getElementById('unsplashKey').value = settings.unsplashKey;
+            
+            // 更新自动下载按钮状态
+            updateAutoDownloadButton();
+        }
+        
+        // 保存配置
+        function saveSettings() {
+            const settings = {
+                apiKey: document.getElementById('apiKey').value,
+                apiBase: document.getElementById('apiBase').value,
+                modelName: document.getElementById('modelName').value || 'gpt-4o-mini',
+                unsplashKey: document.getElementById('unsplashKey').value
+            };
+            
+            localStorage.setItem('pptSettings', JSON.stringify(settings));
+            closeSettings();
+            
+            // 显示成功提示
+            alert('配置已保存！');
+            
+            // 更新自动下载按钮状态
+            updateAutoDownloadButton();
+            
+            // 刷新配置状态
+            checkConfig();
+        }
+        
+        // 测试 API 连接
+        async function testConnection() {
+            const apiKey = document.getElementById('apiKey').value;
+            const apiBase = document.getElementById('apiBase').value || 'https://api.openai.com/v1';
+            const modelName = document.getElementById('modelName').value || 'gpt-4o-mini';
+            
+            if (!apiKey) {
+                alert('请先输入 API Key');
+                return;
+            }
+            
+            const testBtn = document.getElementById('testBtn');
+            const originalText = testBtn.textContent;
+            testBtn.textContent = '⏳ 测试中...';
+            testBtn.disabled = true;
+            
+            try {
+                const response = await fetch('/api/test-connection', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        api_key: apiKey,
+                        api_base: apiBase,
+                        model_name: modelName
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert(`✅ 连接成功！\n\n模型: ${data.model}\n响应时间: ${data.response_time}ms\nAPI: ${data.api_base}`);
+                } else {
+                    alert(`❌ 连接失败\n\n${data.message}`);
+                }
+            } catch (error) {
+                alert(`❌ 测试失败\n\n${error.message}`);
+            } finally {
+                testBtn.textContent = originalText;
+                testBtn.disabled = false;
+            }
+        }
+        
+        // 打开配置弹窗
+        function openSettings() {
+            loadSettings();
+            document.getElementById('settingsModal').classList.add('active');
+        }
+        
+        // 关闭配置弹窗
+        function closeSettings() {
+            document.getElementById('settingsModal').classList.remove('active');
+        }
+        
+        // 模型选择变化
+        document.getElementById('modelName').addEventListener('change', function() {
+            const customGroup = document.getElementById('customModelGroup');
+            customGroup.style.display = this.value === 'custom' ? 'block' : 'none';
+        });
+        
+        // 更新自动下载按钮状态
+        function updateAutoDownloadButton() {
+            const settings = JSON.parse(localStorage.getItem('pptSettings') || '{}');
+            const autoDownloadCheckbox = document.getElementById('autoDownload');
+            const hint = document.getElementById('autoDownloadHint');
+            
+            if (settings.unsplashKey) {
+                autoDownloadCheckbox.disabled = false;
+                hint.textContent = '已配置 Unsplash API Key';
+                hint.style.color = '#10b981';
+            } else {
+                autoDownloadCheckbox.disabled = true;
+                autoDownloadCheckbox.checked = false;
+                hint.textContent = '需要配置 Unsplash API Key';
+                hint.style.color = '#64748b';
+            }
+        }
+        
+        // 检查配置状态
+        async function checkConfig() {
+            const settings = JSON.parse(localStorage.getItem('pptSettings') || '{}');
+            const status = document.getElementById('configStatus');
+            const details = document.getElementById('configDetails');
+            
+            let html = '<ul style="margin-top: 10px; margin-left: 20px;">';
+            
+            if (settings.apiKey) {
+                html += '<li>✓ AI 模型已配置</li>';
+            } else {
+                html += '<li>⚠ AI 模型未配置（点击"配置设置"按钮）</li>';
+            }
+            
+            if (settings.unsplashKey) {
+                html += '<li>✓ 图片搜索已启用</li>';
+            } else {
+                html += '<li>○ 图片搜索未启用（可选）</li>';
+            }
+            
+            // 检查模板数量
+            try {
+                const response = await fetch('/api/templates');
+                const data = await response.json();
+                if (data.success && data.templates) {
+                    html += `<li>✓ 可用模板：${data.templates.length} 个</li>`;
+                }
+            } catch (e) {
+                html += '<li>○ 模板加载中...</li>';
+            }
+            
+            html += '</ul>';
+            details.innerHTML = html;
+            status.style.display = 'block';
+            
+            if (settings.apiKey && settings.unsplashKey) {
+                status.classList.add('success');
+            } else {
+                status.classList.remove('success');
+            }
+        }
+        
+        // 加载模板列表
+        async function loadTemplates() {
+            try {
+                const response = await fetch('/api/templates');
+                const data = await response.json();
+                
+                if (data.success && data.templates && data.templates.length > 0) {
+                    const select = document.getElementById('template');
+                    const hint = document.getElementById('templateHint');
+                    
+                    // 清空现有选项
+                    select.innerHTML = '';
+                    
+                    // 添加默认选项（咨询报告）
+                    const defaultOpt = document.createElement('option');
+                    defaultOpt.value = 'mckinsey_consulting';
+                    defaultOpt.textContent = '咨询报告 - 左文右图，咨询风（推荐）';
+                    defaultOpt.selected = true;
+                    select.appendChild(defaultOpt);
+                    
+                    // 添加其他模板（不分组）
+                    data.templates.forEach(template => {
+                        if (template.id === 'mckinsey_consulting') return;
+                        const option = document.createElement('option');
+                        option.value = template.id;
+                        option.textContent = `${template.name} - ${template.description}`;
+                        select.appendChild(option);
+                    });
+                    
+                    hint.textContent = `${data.templates.length} 个模板`;
+                    hint.style.color = '#10b981';
+                } else {
+                    const hint = document.getElementById('templateHint');
+                    hint.textContent = '暂无模板';
+                    hint.style.color = '#64748b';
+                }
+            } catch (error) {
+                console.error('加载模板失败:', error);
+                const hint = document.getElementById('templateHint');
+                hint.textContent = '加载失败';
+                hint.style.color = '#ef4444';
+            }
+        }
+        
+        // 页面加载时检查配置
+        checkConfig();
+        updateAutoDownloadButton();
+        loadTemplates();  // 加载模板列表
+        
+        // 加载文本动画
+        let loadingDots = 0;
+        let loadingInterval;
+        
+        function startLoadingAnimation() {
+            const loadingTexts = [
+                'AI 正在分析主题',
+                'AI 正在构思内容',
+                'AI 正在生成结构',
+                'AI 正在优化排版',
+                '即将完成'
+            ];
+            let textIndex = 0;
+            
+            loadingInterval = setInterval(() => {
+                loadingDots = (loadingDots + 1) % 4;
+                const dots = '.'.repeat(loadingDots);
+                const text = loadingTexts[textIndex % loadingTexts.length];
+                document.getElementById('loadingText').textContent = text + dots;
+                
+                if (loadingDots === 0) {
+                    textIndex++;
+                }
+            }, 500);
+        }
+        
+        function stopLoadingAnimation() {
+            if (loadingInterval) {
+                clearInterval(loadingInterval);
+            }
+        }
+        
+        // 表单提交
+        document.getElementById('generateForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            // 获取配置
+            const settings = JSON.parse(localStorage.getItem('pptSettings') || '{}');
+            
+            // 检查是否配置了 API Key
+            if (!settings.apiKey) {
+                alert('⚠️ 请先配置 AI API Key！\n\n点击"配置设置"按钮进行配置。');
+                return;
+            }
+            
+            // 获取页数模式
+            const pageMode = document.querySelector('input[name="pageMode"]:checked').value;
+            const autoPageCount = pageMode === 'auto';
+            
+            const formData = {
+                topic: document.getElementById('topic').value,
+                audience: '通用受众',
+                page_count: autoPageCount ? 0 : parseInt(document.getElementById('pageCount').value),
+                description: document.getElementById('description').value,  // 新增：详细描述
+                auto_page_count: autoPageCount,  // 新增：智能页数
+                auto_download: document.getElementById('autoDownload').checked,
+                template_id: document.getElementById('template').value,  // 添加模板 ID
+                // 添加配置信息
+                api_key: settings.apiKey,
+                api_base: settings.apiBase || 'https://api.openai.com/v1',
+                model_name: settings.modelName || 'gpt-4o-mini',
+                unsplash_key: settings.unsplashKey || ''
+            };
+            
+            // 显示加载状态
+            document.getElementById('loading').classList.add('active');
+            document.getElementById('result').classList.remove('active');
+            document.getElementById('preview').style.display = 'none';
+            document.querySelector('.btn-primary').disabled = true;
+            startLoadingAnimation();
+            
+            try {
+                const response = await fetch('/api/generate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showSuccess(data);
+                } else {
+                    showError(data.error || '生成失败');
+                }
+            } catch (error) {
+                showError('网络错误：' + error.message);
+            } finally {
+                stopLoadingAnimation();
+                document.getElementById('loading').classList.remove('active');
+                document.querySelector('.btn-primary').disabled = false;
+            }
+        });
+        
+        // 预览结构
+        async function previewStructure() {
+            // 获取配置
+            const settings = JSON.parse(localStorage.getItem('pptSettings') || '{}');
+            
+            // 检查是否配置了 API Key
+            if (!settings.apiKey) {
+                alert('⚠️ 请先配置 AI API Key！\n\n点击"配置设置"按钮进行配置。');
+                return;
+            }
+            
+            const formData = {
+                topic: document.getElementById('topic').value,
+                audience: '通用受众',
+                page_count: parseInt(document.getElementById('pageCount').value),
+                // 添加配置信息
+                api_key: settings.apiKey,
+                api_base: settings.apiBase || 'https://api.openai.com/v1',
+                model_name: settings.modelName || 'gpt-4o-mini'
+            };
+            
+            if (!formData.topic) {
+                alert('请输入 PPT 主题');
+                return;
+            }
+            
+            document.getElementById('loading').classList.add('active');
+            document.getElementById('preview').style.display = 'none';
+            startLoadingAnimation();
+            
+            try {
+                const response = await fetch('/api/preview', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showPreview(data);
+                } else {
+                    showError(data.error || '预览失败');
+                }
+            } catch (error) {
+                showError('网络错误：' + error.message);
+            } finally {
+                stopLoadingAnimation();
+                document.getElementById('loading').classList.remove('active');
+            }
+        }
+        
+        // 显示成功消息
+        function showSuccess(data) {
+            const result = document.getElementById('result');
+            // URL 编码文件名以支持中文
+            const encodedUrl = '/api/download/' + encodeURIComponent(data.filename);
+            
+            // 获取使用的模板
+            const templateSelect = document.getElementById('template');
+            const templateText = templateSelect.options[templateSelect.selectedIndex].text;
+            const templateInfo = templateSelect.value ? `<p><strong>使用模板：</strong>${templateText}</p>` : '';
+            
+            result.innerHTML = `
+                <div class="success-message">
+                    <h3>🎉 PPT 生成成功！</h3>
+                    <p><strong>标题：</strong>${data.title}</p>
+                    <p><strong>副标题：</strong>${data.subtitle}</p>
+                    <p><strong>页数：</strong>${data.slide_count + 1} 页（含封面）</p>
+                    ${templateInfo}
+                    <div style="margin-top: 20px; display: flex; gap: 12px;">
+                        <a href="${encodedUrl}" class="btn btn-primary" download="${data.filename}" style="flex: 1; text-decoration: none; text-align: center;">
+                            📥 立即下载 PPT
+                        </a>
+                        <button type="button" class="btn btn-secondary" onclick="location.reload()" style="flex: 0 0 auto;">
+                            ✨ 再生成一个
+                        </button>
+                    </div>
+                    <div style="margin-top: 15px; padding: 12px; background: rgba(16, 185, 129, 0.1); border-radius: 8px; font-size: 0.9em; color: #047857;">
+                        💡 提示：你可以用 PowerPoint 打开后继续编辑和美化
+                    </div>
+                </div>
+            `;
+            result.classList.add('active');
+            
+            // 添加成功音效（可选）
+            playSuccessSound();
+            
+            // 记录使用统计
+            recordUsage();
+        }
+        
+        // 记录使用统计
+        function recordUsage() {
+            try {
+                let stats = JSON.parse(localStorage.getItem('usageStats') || '{"total": 0, "lastUsed": null}');
+                stats.total += 1;
+                stats.lastUsed = new Date().toISOString();
+                localStorage.setItem('usageStats', JSON.stringify(stats));
+            } catch (e) {
+                // 忽略错误
+            }
+        }
+        
+        function playSuccessSound() {
+            // 简单的成功提示音效
+            try {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                oscillator.frequency.value = 800;
+                oscillator.type = 'sine';
+                
+                gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+                
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + 0.5);
+            } catch (e) {
+                // 忽略音效错误
+            }
+        }
+        
+        // 显示错误消息
+        function showError(message) {
+            const result = document.getElementById('result');
+            result.innerHTML = `
+                <div class="error-message">
+                    <h3>生成失败</h3>
+                    <p>${message}</p>
+                </div>
+            `;
+            result.classList.add('active');
+        }
+        
+        // 显示预览
+        function showPreview(data) {
+            const preview = document.getElementById('preview');
+            const content = document.getElementById('previewContent');
+            
+            let html = `
+                <div style="background: #f0f0f0; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                    <h3>${data.title}</h3>
+                    <p style="color: #666;">${data.subtitle}</p>
+                </div>
+            `;
+            
+            data.slides.forEach(slide => {
+                html += `
+                    <div class="slide-preview">
+                        <span class="slide-type">${getTypeLabel(slide.type)}</span>
+                        <h4>${slide.index}. ${slide.title}</h4>
+                `;
+                
+                if (slide.bullets && slide.bullets.length > 0) {
+                    html += '<ul>';
+                    slide.bullets.forEach(bullet => {
+                        html += `<li>${bullet}</li>`;
+                    });
+                    html += '</ul>';
+                }
+                
+                if (slide.text) {
+                    html += `<p style="margin-top: 10px; color: #555;">${slide.text}</p>`;
+                }
+                
+                if (slide.image_keyword) {
+                    html += `<p style="margin-top: 10px; color: #667eea;">图片关键词: ${slide.image_keyword}</p>`;
+                }
+                
+                html += '</div>';
+            });
+            
+            content.innerHTML = html;
+            preview.style.display = 'block';
+        }
+        
+        // 获取类型标签
+        function getTypeLabel(type) {
+            const labels = {
+                'bullets': '要点页',
+                'image_with_text': '图文页',
+                'ending': '结束页'
+            };
+            return labels[type] || type;
+        }
+        
+        // 页数模式切换
+        document.querySelectorAll('input[name="pageMode"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                const manualDiv = document.getElementById('manualPageCount');
+                const pageCountInput = document.getElementById('pageCount');
+                
+                if (this.value === 'auto') {
+                    manualDiv.classList.add('disabled');
+                    pageCountInput.disabled = true;
+                } else {
+                    manualDiv.classList.remove('disabled');
+                    pageCountInput.disabled = false;
+                }
+            });
+        });
+        
+        // 文件选择处理
+        document.getElementById('file').addEventListener('change', function(e) {
+            const fileLabel = document.getElementById('fileLabel');
+            const uploadBtn = document.getElementById('uploadBtn');
+            const label = document.querySelector('.file-upload-label');
+            
+            if (this.files.length > 0) {
+                const file = this.files[0];
+                const fileName = file.name;
+                const fileSize = (file.size / 1024 / 1024).toFixed(2);
+                
+                fileLabel.textContent = `${fileName} (${fileSize} MB)`;
+                label.classList.add('has-file');
+                uploadBtn.disabled = false;
+            } else {
+                fileLabel.textContent = '选择文件或拖拽到此处';
+                label.classList.remove('has-file');
+                uploadBtn.disabled = true;
+            }
+        });
+        
+        // 文件上传和解析
+        async function uploadFile() {
+            const fileInput = document.getElementById('file');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                alert('请先选择文件');
+                return;
+            }
+            
+            // 检查文件大小（5 MB）
+            if (file.size > 5 * 1024 * 1024) {
+                alert('文件过大，最大支持 5 MB');
+                return;
+            }
+            
+            // 显示加载状态
+            const btn = event.target;
+            const originalText = btn.textContent;
+            btn.textContent = '解析中...';
+            btn.disabled = true;
+            
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                const response = await fetch('/api/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // 将内容填入描述框
+                    const descriptionTextarea = document.getElementById('description');
+                    const currentDescription = descriptionTextarea.value.trim();
+                    
+                    if (currentDescription) {
+                        // 如果已有内容，追加
+                        descriptionTextarea.value = currentDescription + '\n\n【参考资料】\n' + data.content;
+                    } else {
+                        descriptionTextarea.value = data.content;
+                    }
+                    
+                    // 显示文件信息
+                    document.getElementById('fileLength').textContent = data.summary.length.toLocaleString();
+                    document.getElementById('fileLines').textContent = data.summary.lines.toLocaleString();
+                    document.getElementById('fileTokens').textContent = data.summary.estimated_tokens.toLocaleString();
+                    document.getElementById('fileInfo').classList.add('show');
+                    
+                    // 如果文本被截断，提示用户
+                    if (data.summary.is_truncated) {
+                        alert('⚠️ 文件内容过长，已自动截断到 5 万字。\n\n建议：\n1. 使用更精简的资料\n2. 或在描述框中手动编辑关键内容');
+                    }
+                } else {
+                    alert('解析失败：' + data.error);
+                }
+            } catch (error) {
+                alert('上传失败：' + error.message);
+            } finally {
+                btn.textContent = originalText;
+                btn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>

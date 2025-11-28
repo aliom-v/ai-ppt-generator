@@ -1,0 +1,20 @@
+# 图片目录
+
+将你的图片文件放在这里，用于 PPT 生成。
+
+支持的格式：PNG, JPG, JPEG, GIF, BMP
+
+## 使用方法
+
+1. 将图片文件复制到此目录
+2. 在生成 PPT 时，通过 CLI 交互式添加图片路径
+3. 或在代码中直接设置 `slide.image_path = "images/your_image.png"`
+
+## 示例
+
+```
+images/
+├── workflow.png
+├── architecture.jpg
+└── demo.png
+```
