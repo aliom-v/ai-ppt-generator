@@ -6,8 +6,6 @@
 
 基于大模型的自动化 PPT 生成工具，支持自定义 API 端点和模板。
 
-![Demo](https://via.placeholder.com/800x400?text=AI+PPT+Generator+Demo)
-
 ## 功能特性
 
 - 🤖 调用大模型自动生成 PPT 结构和内容
