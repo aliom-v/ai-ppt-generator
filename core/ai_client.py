@@ -6,6 +6,9 @@ from openai import OpenAI, APIError, APIConnectionError, RateLimitError
 
 from config.settings import AIConfig, settings
 from core.prompt_builder import get_system_prompt, build_user_prompt
+from utils.logger import get_logger
+
+logger = get_logger("ai_client")
 
 
 class AIClientError(Exception):
@@ -117,7 +120,7 @@ def _call_api_with_retry(
             last_error = e
             if attempt < max_retries - 1:
                 wait_time = (2 ** attempt) * 2  # 指数退避: 2, 4, 8 秒
-                print(f"⚠️ API 限流，{wait_time} 秒后重试...")
+                logger.warning(f"API 限流，{wait_time} 秒后重试...")
                 time.sleep(wait_time)
             else:
                 raise RateLimitExceeded(f"API 限流，已重试 {max_retries} 次: {e}")
@@ -126,7 +129,7 @@ def _call_api_with_retry(
             last_error = e
             if attempt < max_retries - 1:
                 wait_time = (2 ** attempt)
-                print(f"⚠️ 网络错误，{wait_time} 秒后重试...")
+                logger.warning(f"网络错误，{wait_time} 秒后重试...")
                 time.sleep(wait_time)
             else:
                 raise NetworkError(f"网络连接失败，已重试 {max_retries} 次: {e}")
@@ -179,7 +182,8 @@ def generate_ppt_plan(
     description: str = "",
     auto_page_count: bool = False,
     config: Optional[AIConfig] = None,
-    progress_callback: callable = None
+    progress_callback: callable = None,
+    use_cache: bool = True
 ) -> Dict[str, Any]:
     """调用大模型生成 PPT 结构（支持分批生成大型 PPT）
     
@@ -191,6 +195,7 @@ def generate_ppt_plan(
         auto_page_count: 是否让 AI 自动判断页数
         config: AI 配置（可选，默认使用环境变量）
         progress_callback: 进度回调函数，接收 (current_batch, total_batches, message)
+        use_cache: 是否使用缓存（默认开启）
         
     Returns:
         包含 PPT 结构的字典
@@ -205,20 +210,36 @@ def generate_ppt_plan(
     
     config.validate()
     
+    # 尝试从缓存获取
+    if use_cache and not auto_page_count:
+        from utils.cache import get_cache
+        cache = get_cache()
+        cached = cache.get(topic, audience, page_count, description, config.model_name)
+        if cached:
+            return cached
+    
     # 计算是否需要分批
     batches = _calculate_batches(page_count) if not auto_page_count and page_count > 35 else [page_count]
     total_batches = len(batches)
     
     if total_batches > 1:
-        print(f"\n📦 页数较多（{page_count}页），将分 {total_batches} 批生成...")
-        return _generate_ppt_plan_batched(
+        logger.info(f"页数较多（{page_count}页），将分 {total_batches} 批生成...")
+        result = _generate_ppt_plan_batched(
             topic, audience, batches, description, config, progress_callback
         )
+    else:
+        # 单批生成
+        result = _generate_ppt_plan_single(
+            topic, audience, page_count, description, auto_page_count, config
+        )
     
-    # 单批生成
-    return _generate_ppt_plan_single(
-        topic, audience, page_count, description, auto_page_count, config
-    )
+    # 保存到缓存
+    if use_cache and not auto_page_count:
+        from utils.cache import get_cache
+        cache = get_cache()
+        cache.set(topic, audience, page_count, result, description, config.model_name)
+    
+    return result
 
 
 def _generate_ppt_plan_batched(
@@ -252,7 +273,7 @@ def _generate_ppt_plan_batched(
         if progress_callback:
             progress_callback(current_batch, total_batches, f"正在生成第 {current_batch}/{total_batches} 批...")
         
-        print(f"\n🔄 生成第 {current_batch}/{total_batches} 批（{batch_pages} 页）...")
+        logger.info(f"生成第 {current_batch}/{total_batches} 批（{batch_pages} 页）...")
         
         # 构建分批提示词
         if batch_idx == 0:
@@ -302,10 +323,10 @@ def _generate_ppt_plan_batched(
                 if slide_title:
                     generated_summary.append(slide_title)
             
-            print(f"✓ 第 {current_batch} 批完成，获得 {len(batch_slides)} 页")
+            logger.info(f"第 {current_batch} 批完成，获得 {len(batch_slides)} 页")
             
         except Exception as e:
-            print(f"⚠️ 第 {current_batch} 批生成失败: {e}")
+            logger.error(f"第 {current_batch} 批生成失败: {e}")
             raise
     
     # 合并结果
@@ -315,7 +336,7 @@ def _generate_ppt_plan_batched(
         "slides": all_slides
     }
     
-    print(f"\n✅ 分批生成完成，共 {len(all_slides)} 页")
+    logger.info(f"分批生成完成，共 {len(all_slides)} 页")
     return result
 
 
@@ -391,11 +412,7 @@ def _generate_ppt_plan_single(
     system_prompt = get_system_prompt()
     user_prompt = build_user_prompt(topic, audience, page_count, description, auto_page_count)
     
-    print(f"\n{'=' * 60}")
-    print(f"📝 生成 PPT: {topic}")
-    print(f"🎯 目标受众: {audience}")
-    print(f"🤖 使用模型: {config.model_name}")
-    print(f"{'=' * 60}\n")
+    logger.info(f"生成 PPT: {topic} | 受众: {audience} | 模型: {config.model_name}")
     
     try:
         content = _call_api_with_retry(
@@ -407,7 +424,7 @@ def _generate_ppt_plan_single(
             temperature=config.temperature
         )
         
-        print(f"📄 AI 返回内容长度: {len(content)} 字符")
+        logger.debug(f"AI 返回内容长度: {len(content)} 字符")
         
         content_lower = content.strip().lower()
         if content_lower.startswith('<!doctype') or content_lower.startswith('<html') or '<html' in content_lower[:500]:

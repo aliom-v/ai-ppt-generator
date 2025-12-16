@@ -9,6 +9,9 @@ from pathlib import Path
 from functools import lru_cache
 
 from config.settings import ImageConfig
+from utils.logger import get_logger
+
+logger = get_logger("image_search")
 
 
 class ImageCache:
@@ -78,7 +81,7 @@ class ImageSearcher:
     ) -> List[Dict]:
         """搜索图片"""
         if not self.api_key:
-            print("⚠️ 未设置 UNSPLASH_ACCESS_KEY，无法搜索图片")
+            logger.warning("未设置 UNSPLASH_ACCESS_KEY，无法搜索图片")
             return []
         
         try:
@@ -101,7 +104,7 @@ class ImageSearcher:
                 for item in response.json().get("results", [])
             ]
         except Exception as e:
-            print(f"搜索图片失败: {e}")
+            logger.error(f"搜索图片失败: {e}")
             return []
     
     def download_image(self, image_url: str, filename: Optional[str] = None) -> Optional[str]:
@@ -119,7 +122,7 @@ class ImageSearcher:
             
             return filepath
         except Exception as e:
-            print(f"下载图片失败: {e}")
+            logger.error(f"下载图片失败: {e}")
             return None
     
     def search_and_download(self, keyword: str, index: int = 0) -> Optional[str]:
@@ -128,12 +131,12 @@ class ImageSearcher:
         if self.cache:
             cached = self.cache.get(keyword)
             if cached:
-                print(f"✓ 使用缓存图片: {cached}")
+                logger.debug(f"使用缓存图片: {cached}")
                 return cached
         
         results = self.search_images(keyword, per_page=index + 1)
         if not results or index >= len(results):
-            print(f"未找到关键词 '{keyword}' 的图片")
+            logger.warning(f"未找到关键词 '{keyword}' 的图片")
             return None
         
         image = results[index]
@@ -165,7 +168,7 @@ class ImageSearcher:
                 try:
                     results[keyword] = future.result()
                 except Exception as e:
-                    print(f"下载 '{keyword}' 失败: {e}")
+                    logger.error(f"下载 '{keyword}' 失败: {e}")
                     results[keyword] = None
         
         return results

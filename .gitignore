@@ -63,3 +63,6 @@ desktop.ini
 *.tmp
 *.temp
 .cache/
+
+# 生成缓存
+cache/

@@ -75,6 +75,37 @@ class TemplateManager:
             "name": "杂志排版",
             "category": "创意",
             "description": "大图衬线，杂志风"
+        },
+        # 新增模板
+        "dark_theme": {
+            "name": "暗色主题",
+            "category": "现代",
+            "description": "深色背景，夜间模式"
+        },
+        "minimalist": {
+            "name": "极简风格",
+            "category": "设计",
+            "description": "纯白简约，无装饰"
+        },
+        "chinese_style": {
+            "name": "中国风",
+            "category": "文化",
+            "description": "红金配色，传统美学"
+        },
+        "gradient_blue": {
+            "name": "渐变蓝",
+            "category": "现代",
+            "description": "蓝色渐变，科技感"
+        },
+        "tech_modern": {
+            "name": "科技现代",
+            "category": "科技",
+            "description": "深色网格，未来感"
+        },
+        "warm_sunset": {
+            "name": "暖色夕阳",
+            "category": "创意",
+            "description": "橙色渐变，温暖活力"
         }
     }
     

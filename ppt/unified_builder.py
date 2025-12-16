@@ -9,6 +9,9 @@ from pptx.enum.shapes import MSO_SHAPE
 from pptx.dml.color import RGBColor
 
 from core.ppt_plan import PptPlan, Slide
+from utils.logger import get_logger
+
+logger = get_logger("ppt_builder")
 
 # 尝试导入图片搜索模块
 try:
@@ -64,10 +67,10 @@ def build_ppt_from_plan(
     use_template = template_path and os.path.exists(template_path) and template_path.endswith('.pptx')
     
     if use_template:
-        print(f"✓ 使用模板: {template_path}")
+        logger.info(f"使用模板: {template_path}")
         prs = Presentation(template_path)
     else:
-        print("✓ 使用默认样式")
+        logger.info("使用默认样式")
         prs = Presentation()
     
     # 预下载所有图片（并行）
@@ -104,7 +107,7 @@ def build_ppt_from_plan(
         os.makedirs(output_dir)
     
     prs.save(output_path)
-    print(f"✓ PPT 已保存: {output_path}")
+    logger.info(f"PPT 已保存: {output_path}")
 
 
 def _predownload_images(slides: List[Slide]) -> None:
@@ -124,14 +127,14 @@ def _predownload_images(slides: List[Slide]) -> None:
     if not keywords:
         return
     
-    print(f"📥 并行下载 {len(keywords)} 张图片...")
+    logger.info(f"并行下载 {len(keywords)} 张图片...")
     results = download_images_parallel(keywords)
     
     for keyword, path in results.items():
         if path and keyword in keyword_to_slides:
             for slide in keyword_to_slides[keyword]:
                 slide.image_path = path
-            print(f"  ✓ {keyword}")
+            logger.debug(f"下载完成: {keyword}")
 
 
 def _set_font(text_frame, font_name: str = None, font_size: int = None, bold: bool = False, color: RGBColor = None):
@@ -641,7 +644,7 @@ def _create_image_with_text_slide(prs: Presentation, slide_data: Slide) -> None:
                 width=Inches(img_width)
             )
         except Exception as e:
-            print(f"⚠️ 无法插入图片: {e}")
+            logger.warning(f"无法插入图片: {e}")
             _add_image_placeholder(slide, slide_data, img_left, img_width)
     else:
         _add_image_placeholder(slide, slide_data, img_left, img_width)

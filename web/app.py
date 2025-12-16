@@ -27,7 +27,10 @@ from core.ppt_plan import ppt_plan_from_dict
 from ppt.unified_builder import build_ppt_from_plan
 from ppt.template_manager import template_manager
 from utils.file_parser import parse_file, get_text_summary, validate_file
+from utils.logger import get_logger
 from config.settings import AIConfig, ImageConfig, AppConfig
+
+logger = get_logger("web")
 
 
 # 应用配置
@@ -153,12 +156,7 @@ def generate_ppt():
                 pass
         
         # 日志
-        print(f"\n{'=' * 60}")
-        print(f"📝 生成 PPT: {topic}")
-        print(f"🎯 受众: {audience}")
-        print(f"🤖 模型: {ai_config.model_name}")
-        print(f"📄 页数: {'自动' if auto_page_count else page_count}")
-        print(f"{'=' * 60}\n")
+        logger.info(f"生成 PPT: {topic} | 受众: {audience} | 模型: {ai_config.model_name} | 页数: {'自动' if auto_page_count else page_count}")
         
         # 生成 PPT 结构
         plan_dict = generate_ppt_plan(
@@ -192,9 +190,7 @@ def generate_ppt():
     except AIClientError as e:
         return jsonify({'error': str(e), 'type': 'ai_error'}), 500
     except Exception as e:
-        print(f"生成失败: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"生成失败: {e}", exc_info=True)
         return jsonify({'error': str(e)}), 500
 
 
@@ -376,10 +372,5 @@ def health():
 
 
 if __name__ == '__main__':
-    print(f"\n{'=' * 60}")
-    print("🚀 AI PPT 生成器 - Web 界面")
-    print(f"{'=' * 60}")
-    print(f"\n🌐 访问地址: http://localhost:{app_config.port}")
-    print("💡 按 Ctrl+C 停止服务器\n")
-    
+    logger.info(f"AI PPT 生成器启动 | 访问地址: http://localhost:{app_config.port}")
     app.run(debug=app_config.debug, host=app_config.host, port=app_config.port)
