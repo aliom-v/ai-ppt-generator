@@ -1,17 +1,21 @@
-"""网络图片搜索模块 - 优化版（支持并行下载和缓存）"""
+"""网络图片搜索模块 - 优化版（支持并行下载、缓存和重试机制）"""
 import os
 import hashlib
 import json
+import time
 import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional, List, Dict
 from pathlib import Path
-from functools import lru_cache
 
 from config.settings import ImageConfig
 from utils.logger import get_logger
 
 logger = get_logger("image_search")
+
+# 重试配置
+MAX_RETRIES = 3
+RETRY_DELAY = 1  # 秒
 
 
 class ImageCache:
@@ -30,16 +34,16 @@ class ImageCache:
             try:
                 with open(self.cache_file, 'r', encoding='utf-8') as f:
                     self._cache = json.load(f)
-            except:
-                self._cache = {}
+            except (json.JSONDecodeError, IOError):
+                self._cache = {}  # 缓存文件损坏或无法读取
     
     def _save_cache(self):
         """保存缓存索引"""
         try:
             with open(self.cache_file, 'w', encoding='utf-8') as f:
                 json.dump(self._cache, f, ensure_ascii=False, indent=2)
-        except:
-            pass
+        except IOError:
+            pass  # 无法写入缓存文件
     
     def get(self, keyword: str) -> Optional[str]:
         """获取缓存的图片路径"""
@@ -108,22 +112,39 @@ class ImageSearcher:
             return []
     
     def download_image(self, image_url: str, filename: Optional[str] = None) -> Optional[str]:
-        """下载单张图片"""
-        try:
-            response = requests.get(image_url, timeout=30)
-            response.raise_for_status()
-            
-            if not filename:
-                filename = f"image_{hash(image_url) % 100000}.jpg"
-            
-            filepath = os.path.join(self.download_dir, filename)
-            with open(filepath, "wb") as f:
-                f.write(response.content)
-            
-            return filepath
-        except Exception as e:
-            logger.error(f"下载图片失败: {e}")
-            return None
+        """下载单张图片（带重试机制）"""
+        last_error = None
+
+        for attempt in range(MAX_RETRIES):
+            try:
+                response = requests.get(image_url, timeout=30)
+                response.raise_for_status()
+
+                if not filename:
+                    filename = f"image_{hash(image_url) % 100000}.jpg"
+
+                filepath = os.path.join(self.download_dir, filename)
+                with open(filepath, "wb") as f:
+                    f.write(response.content)
+
+                return filepath
+
+            except requests.exceptions.Timeout as e:
+                last_error = e
+                if attempt < MAX_RETRIES - 1:
+                    logger.warning(f"下载超时，第 {attempt + 1} 次重试...")
+                    time.sleep(RETRY_DELAY * (attempt + 1))
+            except requests.exceptions.RequestException as e:
+                last_error = e
+                if attempt < MAX_RETRIES - 1:
+                    logger.warning(f"下载失败: {e}，第 {attempt + 1} 次重试...")
+                    time.sleep(RETRY_DELAY * (attempt + 1))
+            except Exception as e:
+                logger.error(f"下载图片失败: {e}")
+                return None
+
+        logger.error(f"下载图片失败，已重试 {MAX_RETRIES} 次: {last_error}")
+        return None
     
     def search_and_download(self, keyword: str, index: int = 0) -> Optional[str]:
         """搜索并下载图片（带缓存）"""
@@ -184,6 +205,12 @@ def get_searcher() -> ImageSearcher:
     if _searcher is None:
         _searcher = ImageSearcher()
     return _searcher
+
+
+def reset_searcher(config: Optional[ImageConfig] = None) -> None:
+    """重置全局搜索器（用于更新配置）"""
+    global _searcher
+    _searcher = ImageSearcher(config) if config else None
 
 
 def search_and_download_image(keyword: str, index: int = 0) -> Optional[str]:

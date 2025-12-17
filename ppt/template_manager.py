@@ -42,70 +42,71 @@ class TemplateManager:
         return templates
     
     # 默认模板ID
-    DEFAULT_TEMPLATE = "mckinsey_consulting"
-    
-    # 模板配置映射
+    DEFAULT_TEMPLATE = "premium_tech_blue"
+
+    # 模板配置映射（高质量模板）
     TEMPLATE_CONFIG = {
-        "academic_latex": {
-            "name": "学术答辩",
-            "category": "学术",
-            "description": "极简黑白，学术风"
-        },
-        "yc_pitch_deck": {
-            "name": "融资路演",
-            "category": "商务",
-            "description": "大字大数，路演风"
-        },
-        "swiss_style": {
-            "name": "瑞士设计",
-            "category": "设计",
-            "description": "蓝橙撞色，设计风"
-        },
-        "handdrawn_sketch": {
-            "name": "手绘笔记",
-            "category": "教育",
-            "description": "手写涂鸦，笔记风"
-        },
-        "mckinsey_consulting": {
-            "name": "咨询报告",
-            "category": "商务",
-            "description": "左文右图，咨询风"
-        },
-        "magazine_editorial": {
-            "name": "杂志排版",
-            "category": "创意",
-            "description": "大图衬线，杂志风"
-        },
-        # 新增模板
-        "dark_theme": {
-            "name": "暗色主题",
-            "category": "现代",
-            "description": "深色背景，夜间模式"
-        },
-        "minimalist": {
-            "name": "极简风格",
-            "category": "设计",
-            "description": "纯白简约，无装饰"
-        },
-        "chinese_style": {
-            "name": "中国风",
-            "category": "文化",
-            "description": "红金配色，传统美学"
-        },
-        "gradient_blue": {
-            "name": "渐变蓝",
-            "category": "现代",
-            "description": "蓝色渐变，科技感"
-        },
-        "tech_modern": {
-            "name": "科技现代",
+        # 高质量专业模板（6个）
+        "premium_tech_blue": {
+            "name": "科技蓝",
             "category": "科技",
-            "description": "深色网格，未来感"
+            "description": "现代专业，深色背景配亮蓝装饰"
         },
-        "warm_sunset": {
-            "name": "暖色夕阳",
+        "premium_elegant_dark": {
+            "name": "优雅深色",
+            "category": "高端",
+            "description": "紫粉渐变，高端大气风格"
+        },
+        "premium_nature_green": {
+            "name": "自然绿",
+            "category": "环保",
+            "description": "清新绿色，环保自然主题"
+        },
+        "premium_warm_orange": {
+            "name": "暖橙色",
             "category": "创意",
-            "description": "橙色渐变，温暖活力"
+            "description": "活力橙色，温暖创意风格"
+        },
+        "premium_minimal_bw": {
+            "name": "极简黑白",
+            "category": "设计",
+            "description": "高端简约，黑白红点缀"
+        },
+        "premium_corporate": {
+            "name": "商务蓝灰",
+            "category": "商务",
+            "description": "专业稳重，蓝灰金配色"
+        },
+        # 多样化风格模板（6个）
+        "style_diagonal_split": {
+            "name": "斜切分割",
+            "category": "创意",
+            "description": "对角线动感切割，打破常规"
+        },
+        "style_bento_grid": {
+            "name": "Bento网格",
+            "category": "现代",
+            "description": "日式便当盒布局，信息密集有序"
+        },
+        "style_card_stack": {
+            "name": "卡片堆叠",
+            "category": "设计",
+            "description": "层叠卡片效果，有深度层次感"
+        },
+        "style_bold_typography": {
+            "name": "大字报风",
+            "category": "创意",
+            "description": "超大文字主导，视觉冲击力强"
+        },
+        "style_magazine_layout": {
+            "name": "杂志排版",
+            "category": "设计",
+            "description": "多栏混排编辑风，优雅精致"
+        },
+        "style_geometric_mosaic": {
+            "name": "几何拼接",
+            "category": "艺术",
+            "description": "三角形多边形组合，艺术感强"
         }
     }
     

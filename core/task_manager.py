@@ -13,6 +13,10 @@ from queue import Queue, PriorityQueue
 from concurrent.futures import ThreadPoolExecutor
 import uuid
 
+from utils.logger import get_logger
+
+logger = get_logger("task_manager")
+
 
 # ==================== 历史记录模块 ====================
 
@@ -68,7 +72,7 @@ class HistoryManager:
                     data = json.load(f)
                     self._records = [HistoryRecord.from_dict(r) for r in data]
             except Exception as e:
-                print(f"加载历史记录失败: {e}")
+                logger.error(f"加载历史记录失败: {e}")
                 self._records = []
 
     def _save(self):
@@ -78,7 +82,7 @@ class HistoryManager:
             with open(self.history_file, 'w', encoding='utf-8') as f:
                 json.dump([r.to_dict() for r in self._records], f, ensure_ascii=False, indent=2)
         except Exception as e:
-            print(f"保存历史记录失败: {e}")
+            logger.error(f"保存历史记录失败: {e}")
 
     def add(self, record: HistoryRecord) -> str:
         """添加记录"""
@@ -121,8 +125,8 @@ class HistoryManager:
                     if delete_file and os.path.exists(record.filepath):
                         try:
                             os.remove(record.filepath)
-                        except:
-                            pass
+                        except OSError as e:
+                            logger.warning(f"删除文件失败 {record.filepath}: {e}")
                     self._records.pop(i)
                     self._save()
                     return True
@@ -137,8 +141,8 @@ class HistoryManager:
                     if os.path.exists(record.filepath):
                         try:
                             os.remove(record.filepath)
-                        except:
-                            pass
+                        except OSError as e:
+                            logger.warning(f"删除文件失败 {record.filepath}: {e}")
             self._records = []
             self._save()
             return count
@@ -240,7 +244,7 @@ class TaskQueue:
                         if task.status == TaskStatus.PENDING:
                             self._queue.put((task.priority, task.id))
             except Exception as e:
-                print(f"加载任务队列失败: {e}")
+                logger.error(f"加载任务队列失败: {e}")
 
     def _save(self):
         """保存任务队列"""
@@ -256,7 +260,7 @@ class TaskQueue:
                     tasks_data.append(task_dict)
                 json.dump(tasks_data, f, ensure_ascii=False, indent=2)
         except Exception as e:
-            print(f"保存任务队列失败: {e}")
+            logger.error(f"保存任务队列失败: {e}")
 
     def add_task(self, task: TaskItem) -> str:
         """添加任务"""
@@ -358,7 +362,7 @@ class TaskQueue:
 
                 except Exception as e:
                     if self._running:
-                        print(f"任务处理错误: {e}")
+                        logger.error(f"任务处理错误: {e}")
                     time.sleep(1)
 
         # 启动工作线程
@@ -432,7 +436,7 @@ class GenerationCache:
                         if not entry.is_expired():
                             self._cache[key] = entry
             except Exception as e:
-                print(f"加载缓存失败: {e}")
+                logger.error(f"加载缓存失败: {e}")
 
     def _save(self):
         """保存缓存索引"""
@@ -442,7 +446,7 @@ class GenerationCache:
             with open(self._index_file, 'w', encoding='utf-8') as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
         except Exception as e:
-            print(f"保存缓存失败: {e}")
+            logger.error(f"保存缓存失败: {e}")
 
     def _make_key(self, topic: str, page_count: int, template_id: str) -> str:
         """生成缓存键"""
@@ -475,8 +479,8 @@ class GenerationCache:
                         try:
                             with open(cache_file, 'r', encoding='utf-8') as f:
                                 return json.load(f)
-                        except:
-                            pass
+                        except (IOError, json.JSONDecodeError) as e:
+                            logger.warning(f"读取缓存文件失败 {cache_file}: {e}")
                 else:
                     del self._cache[key]
 
@@ -505,7 +509,8 @@ class GenerationCache:
                                 abs(cached_pages - page_count) <= tolerance):
                                 entry.hits += 1
                                 return data
-                    except:
+                    except (IOError, json.JSONDecodeError) as e:
+                        logger.debug(f"读取缓存文件失败 {cache_file}: {e}")
                         continue
 
             return None
@@ -529,7 +534,7 @@ class GenerationCache:
                 with open(cache_file, 'w', encoding='utf-8') as f:
                     json.dump(value, f, ensure_ascii=False, indent=2)
             except Exception as e:
-                print(f"写入缓存文件失败: {e}")
+                logger.error(f"写入缓存文件失败: {e}")
                 return
 
             # 更新索引
@@ -564,8 +569,8 @@ class GenerationCache:
             if os.path.exists(cache_file):
                 try:
                     os.remove(cache_file)
-                except:
-                    pass
+                except OSError as e:
+                    logger.warning(f"删除缓存文件失败 {cache_file}: {e}")
             del self._cache[key]
 
     def invalidate(self, topic: str, page_count: int, template_id: str):
@@ -578,8 +583,8 @@ class GenerationCache:
                 if os.path.exists(cache_file):
                     try:
                         os.remove(cache_file)
-                    except:
-                        pass
+                    except OSError as e:
+                        logger.warning(f"删除缓存文件失败 {cache_file}: {e}")
                 del self._cache[key]
                 self._save()
 
@@ -594,8 +599,8 @@ class GenerationCache:
                 if os.path.exists(cache_file):
                     try:
                         os.remove(cache_file)
-                    except:
-                        pass
+                    except OSError as e:
+                        logger.warning(f"删除缓存文件失败 {cache_file}: {e}")
 
             self._cache = {}
             self._save()
@@ -620,24 +625,34 @@ class GenerationCache:
 _history_manager: Optional[HistoryManager] = None
 _task_queue: Optional[TaskQueue] = None
 _generation_cache: Optional[GenerationCache] = None
+_global_lock = threading.Lock()
 
 
 def get_history_manager() -> HistoryManager:
+    """获取历史管理器实例（线程安全）"""
     global _history_manager
     if _history_manager is None:
-        _history_manager = HistoryManager()
+        with _global_lock:
+            if _history_manager is None:
+                _history_manager = HistoryManager()
     return _history_manager
 
 
 def get_task_queue() -> TaskQueue:
+    """获取任务队列实例（线程安全）"""
     global _task_queue
     if _task_queue is None:
-        _task_queue = TaskQueue()
+        with _global_lock:
+            if _task_queue is None:
+                _task_queue = TaskQueue()
     return _task_queue
 
 
 def get_generation_cache() -> GenerationCache:
+    """获取生成缓存实例（线程安全）"""
     global _generation_cache
     if _generation_cache is None:
-        _generation_cache = GenerationCache()
+        with _global_lock:
+            if _generation_cache is None:
+                _generation_cache = GenerationCache()
     return _generation_cache

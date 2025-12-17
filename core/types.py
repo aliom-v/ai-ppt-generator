@@ -1,9 +1,17 @@
 """类型定义模块"""
-from typing import TypedDict, List, Optional, Literal
+from typing import TypedDict, List, Optional, Literal, Dict, Any
 
 
-# Slide 类型
-SlideType = Literal["bullets", "image_with_text", "ending"]
+# Slide 类型 - 支持7种页面类型
+SlideType = Literal[
+    "bullets",        # 要点页
+    "image_with_text", # 图文混排页
+    "two_column",     # 双栏布局页
+    "timeline",       # 时间线页
+    "comparison",     # 对比页
+    "quote",          # 引用/名言页
+    "ending"          # 结束页
+]
 
 
 class SlideDict(TypedDict, total=False):
@@ -15,6 +23,19 @@ class SlideDict(TypedDict, total=False):
     image_path: Optional[str]
     image_keyword: Optional[str]
     subtitle: str
+    # two_column 类型字段
+    left_title: str
+    left_items: List[str]
+    right_title: str
+    right_items: List[str]
+    # timeline 类型字段
+    timeline_items: List[Dict[str, str]]  # [{time: str, event: str}, ...]
+    # comparison 类型字段
+    comparison_left: Dict[str, Any]  # {title: str, items: List[str]}
+    comparison_right: Dict[str, Any]
+    # quote 类型字段
+    quote_text: str
+    quote_author: str
 
 
 class PptPlanDict(TypedDict):

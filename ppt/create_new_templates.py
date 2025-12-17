@@ -227,13 +227,342 @@ def create_warm_sunset_template():
     print("✓ 暖色夕阳模板已创建: warm_sunset.pptx")
 
 
+def create_corporate_blue_template():
+    """创建企业蓝模板（正式商务）"""
+    prs = Presentation()
+    prs.slide_width = Inches(13.333)
+    prs.slide_height = Inches(7.5)
+
+    # 企业蓝配色
+    bg_color = RGBColor(255, 255, 255)
+    primary = RGBColor(0, 82, 147)  # 深蓝
+    secondary = RGBColor(240, 245, 250)  # 浅蓝灰
+    accent = RGBColor(0, 120, 200)  # 亮蓝
+
+    # 封面
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+
+    # 白色背景
+    bg = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, 0, 0, prs.slide_width, prs.slide_height)
+    bg.fill.solid()
+    bg.fill.fore_color.rgb = bg_color
+    bg.line.fill.background()
+
+    # 顶部深蓝色条
+    top_bar = slide.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE, 0, 0,
+        prs.slide_width, Inches(1.2)
+    )
+    top_bar.fill.solid()
+    top_bar.fill.fore_color.rgb = primary
+    top_bar.line.fill.background()
+
+    # 底部细条
+    bottom_bar = slide.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE, 0, prs.slide_height - Inches(0.1),
+        prs.slide_width, Inches(0.1)
+    )
+    bottom_bar.fill.solid()
+    bottom_bar.fill.fore_color.rgb = accent
+    bottom_bar.line.fill.background()
+
+    # 右侧装饰块
+    right_block = slide.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE, prs.slide_width - Inches(1.5), Inches(1.2),
+        Inches(1.5), prs.slide_height - Inches(1.3)
+    )
+    right_block.fill.solid()
+    right_block.fill.fore_color.rgb = secondary
+    right_block.line.fill.background()
+
+    prs.save('ppt/pptx_templates/corporate_blue.pptx')
+    print("✓ 企业蓝模板已创建: corporate_blue.pptx")
+
+
+def create_nature_green_template():
+    """创建自然绿模板（环保主题）"""
+    prs = Presentation()
+    prs.slide_width = Inches(13.333)
+    prs.slide_height = Inches(7.5)
+
+    # 自然绿配色
+    bg_color = RGBColor(250, 255, 250)  # 淡绿白
+    primary = RGBColor(34, 139, 34)  # 森林绿
+    secondary = RGBColor(144, 238, 144)  # 浅绿
+    accent = RGBColor(85, 170, 85)  # 草绿
+
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+
+    # 背景
+    bg = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, 0, 0, prs.slide_width, prs.slide_height)
+    bg.fill.solid()
+    bg.fill.fore_color.rgb = bg_color
+    bg.line.fill.background()
+
+    # 左侧渐变装饰
+    left_accent = slide.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE, 0, 0,
+        Inches(0.25), prs.slide_height
+    )
+    left_accent.fill.solid()
+    left_accent.fill.fore_color.rgb = primary
+    left_accent.line.fill.background()
+
+    # 底部装饰条
+    bottom_strip = slide.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE, 0, prs.slide_height - Inches(0.8),
+        prs.slide_width, Inches(0.8)
+    )
+    bottom_strip.fill.solid()
+    bottom_strip.fill.fore_color.rgb = secondary
+    bottom_strip.line.fill.background()
+
+    # 圆形装饰
+    circle = slide.shapes.add_shape(
+        MSO_SHAPE.OVAL, prs.slide_width - Inches(4), Inches(-1),
+        Inches(5), Inches(5)
+    )
+    circle.fill.solid()
+    circle.fill.fore_color.rgb = RGBColor(200, 240, 200)
+    circle.line.fill.background()
+
+    prs.save('ppt/pptx_templates/nature_green.pptx')
+    print("✓ 自然绿模板已创建: nature_green.pptx")
+
+
+def create_elegant_purple_template():
+    """创建优雅紫模板（创意艺术）"""
+    prs = Presentation()
+    prs.slide_width = Inches(13.333)
+    prs.slide_height = Inches(7.5)
+
+    # 优雅紫配色
+    primary = RGBColor(102, 51, 153)  # 紫色
+    secondary = RGBColor(180, 150, 200)  # 淡紫
+    bg_color = RGBColor(255, 250, 255)  # 淡紫白
+    gold = RGBColor(200, 170, 110)  # 金色
+
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+
+    # 背景
+    bg = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, 0, 0, prs.slide_width, prs.slide_height)
+    bg.fill.solid()
+    bg.fill.fore_color.rgb = bg_color
+    bg.line.fill.background()
+
+    # 顶部紫色装饰
+    top_shape = slide.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE, 0, 0,
+        prs.slide_width, Inches(0.15)
+    )
+    top_shape.fill.solid()
+    top_shape.fill.fore_color.rgb = primary
+    top_shape.line.fill.background()
+
+    # 左侧装饰条
+    left_bar = slide.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE, Inches(0.4), Inches(0.5),
+        Pt(5), Inches(1.2)
+    )
+    left_bar.fill.solid()
+    left_bar.fill.fore_color.rgb = gold
+    left_bar.line.fill.background()
+
+    # 底部渐变装饰
+    bottom_shape = slide.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE, 0, prs.slide_height - Inches(1),
+        prs.slide_width, Inches(1)
+    )
+    bottom_shape.fill.solid()
+    bottom_shape.fill.fore_color.rgb = secondary
+    bottom_shape.line.fill.background()
+
+    prs.save('ppt/pptx_templates/elegant_purple.pptx')
+    print("✓ 优雅紫模板已创建: elegant_purple.pptx")
+
+
+def create_startup_neon_template():
+    """创建创业霓虹模板（现代活力）"""
+    prs = Presentation()
+    prs.slide_width = Inches(13.333)
+    prs.slide_height = Inches(7.5)
+
+    # 霓虹配色
+    bg_color = RGBColor(20, 20, 30)  # 深色背景
+    neon_pink = RGBColor(255, 0, 128)  # 霓虹粉
+    neon_blue = RGBColor(0, 200, 255)  # 霓虹蓝
+    neon_green = RGBColor(0, 255, 150)  # 霓虹绿
+
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+
+    # 深色背景
+    bg = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, 0, 0, prs.slide_width, prs.slide_height)
+    bg.fill.solid()
+    bg.fill.fore_color.rgb = bg_color
+    bg.line.fill.background()
+
+    # 霓虹粉线条
+    pink_line = slide.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE, 0, Inches(2),
+        prs.slide_width, Pt(3)
+    )
+    pink_line.fill.solid()
+    pink_line.fill.fore_color.rgb = neon_pink
+    pink_line.line.fill.background()
+
+    # 霓虹蓝线条
+    blue_line = slide.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE, 0, Inches(5.5),
+        prs.slide_width, Pt(3)
+    )
+    blue_line.fill.solid()
+    blue_line.fill.fore_color.rgb = neon_blue
+    blue_line.line.fill.background()
+
+    # 左侧霓虹绿装饰
+    green_bar = slide.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE, 0, 0,
+        Pt(4), prs.slide_height
+    )
+    green_bar.fill.solid()
+    green_bar.fill.fore_color.rgb = neon_green
+    green_bar.line.fill.background()
+
+    prs.save('ppt/pptx_templates/startup_neon.pptx')
+    print("✓ 创业霓虹模板已创建: startup_neon.pptx")
+
+
+def create_education_light_template():
+    """创建教育亮色模板（学习主题）"""
+    prs = Presentation()
+    prs.slide_width = Inches(13.333)
+    prs.slide_height = Inches(7.5)
+
+    # 教育配色
+    bg_color = RGBColor(255, 255, 255)
+    primary = RGBColor(66, 133, 244)  # 蓝色
+    secondary = RGBColor(251, 188, 4)  # 黄色
+    accent = RGBColor(234, 67, 53)  # 红色
+    green = RGBColor(52, 168, 83)  # 绿色
+
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+
+    # 白色背景
+    bg = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, 0, 0, prs.slide_width, prs.slide_height)
+    bg.fill.solid()
+    bg.fill.fore_color.rgb = bg_color
+    bg.line.fill.background()
+
+    # 顶部彩色条
+    colors = [primary, secondary, accent, green]
+    bar_width = prs.slide_width / 4
+    for i, color in enumerate(colors):
+        bar = slide.shapes.add_shape(
+            MSO_SHAPE.RECTANGLE, bar_width * i, 0,
+            bar_width + Pt(1), Pt(8)
+        )
+        bar.fill.solid()
+        bar.fill.fore_color.rgb = color
+        bar.line.fill.background()
+
+    # 左侧蓝色装饰
+    left_bar = slide.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE, 0, Inches(0.5),
+        Pt(6), Inches(1)
+    )
+    left_bar.fill.solid()
+    left_bar.fill.fore_color.rgb = primary
+    left_bar.line.fill.background()
+
+    # 底部装饰
+    bottom_bar = slide.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE, 0, prs.slide_height - Inches(0.3),
+        prs.slide_width, Inches(0.3)
+    )
+    bottom_bar.fill.solid()
+    bottom_bar.fill.fore_color.rgb = RGBColor(240, 245, 250)
+    bottom_bar.line.fill.background()
+
+    prs.save('ppt/pptx_templates/education_light.pptx')
+    print("✓ 教育亮色模板已创建: education_light.pptx")
+
+
+def create_medical_clean_template():
+    """创建医疗简洁模板（专业医疗）"""
+    prs = Presentation()
+    prs.slide_width = Inches(13.333)
+    prs.slide_height = Inches(7.5)
+
+    # 医疗配色
+    bg_color = RGBColor(255, 255, 255)
+    primary = RGBColor(0, 150, 136)  # 青绿色
+    secondary = RGBColor(240, 250, 249)  # 淡青
+    accent = RGBColor(0, 188, 212)  # 青色
+
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+
+    # 白色背景
+    bg = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, 0, 0, prs.slide_width, prs.slide_height)
+    bg.fill.solid()
+    bg.fill.fore_color.rgb = bg_color
+    bg.line.fill.background()
+
+    # 顶部青绿色条
+    top_bar = slide.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE, 0, 0,
+        prs.slide_width, Inches(0.8)
+    )
+    top_bar.fill.solid()
+    top_bar.fill.fore_color.rgb = primary
+    top_bar.line.fill.background()
+
+    # 右侧装饰块
+    right_block = slide.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE, prs.slide_width - Inches(2), Inches(0.8),
+        Inches(2), prs.slide_height - Inches(0.8)
+    )
+    right_block.fill.solid()
+    right_block.fill.fore_color.rgb = secondary
+    right_block.line.fill.background()
+
+    # 底部细线
+    bottom_line = slide.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE, 0, prs.slide_height - Pt(4),
+        prs.slide_width, Pt(4)
+    )
+    bottom_line.fill.solid()
+    bottom_line.fill.fore_color.rgb = accent
+    bottom_line.line.fill.background()
+
+    # 十字装饰
+    cross_h = slide.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE, Inches(11.5), Inches(0.2),
+        Inches(0.6), Pt(5)
+    )
+    cross_h.fill.solid()
+    cross_h.fill.fore_color.rgb = RGBColor(255, 255, 255)
+    cross_h.line.fill.background()
+
+    cross_v = slide.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE, Inches(11.75), Inches(0.05),
+        Pt(5), Inches(0.5)
+    )
+    cross_v.fill.solid()
+    cross_v.fill.fore_color.rgb = RGBColor(255, 255, 255)
+    cross_v.line.fill.background()
+
+    prs.save('ppt/pptx_templates/medical_clean.pptx')
+    print("✓ 医疗简洁模板已创建: medical_clean.pptx")
+
+
 def create_all_templates():
     """创建所有新模板"""
     os.makedirs('ppt/pptx_templates', exist_ok=True)
 
     print("\n创建新模板...")
-    print("=" * 40)
+    print("=" * 50)
 
+    # 原有模板
     create_dark_theme_template()
     create_minimalist_template()
     create_chinese_style_template()
@@ -241,8 +570,16 @@ def create_all_templates():
     create_tech_modern_template()
     create_warm_sunset_template()
 
-    print("=" * 40)
-    print("所有新模板创建完成！\n")
+    # 新增模板
+    create_corporate_blue_template()
+    create_nature_green_template()
+    create_elegant_purple_template()
+    create_startup_neon_template()
+    create_education_light_template()
+    create_medical_clean_template()
+
+    print("=" * 50)
+    print("所有新模板创建完成！共 12 个模板\n")
 
 
 if __name__ == "__main__":

@@ -63,15 +63,21 @@ class AIConfig:
 class ImageConfig:
     """图片搜索配置"""
     unsplash_key: str = ""
+    pexels_key: str = ""
+    pixabay_key: str = ""
     download_dir: str = "images/downloaded"
     cache_enabled: bool = True
-    max_concurrent_downloads: int = 3
-    
+    max_concurrent_downloads: int = 8  # 并发下载数，从3提升到8以提高性能
+    download_timeout: int = 30  # 单张图片下载超时（秒）
+
     @classmethod
     def from_env(cls) -> "ImageConfig":
         """从环境变量创建配置"""
         return cls(
             unsplash_key=os.getenv("UNSPLASH_ACCESS_KEY", ""),
+            pexels_key=os.getenv("PEXELS_API_KEY", ""),
+            pixabay_key=os.getenv("PIXABAY_API_KEY", ""),
+            max_concurrent_downloads=int(os.getenv("IMAGE_MAX_CONCURRENT", "8")),
         )
 
 

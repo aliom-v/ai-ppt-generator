@@ -1,12 +1,14 @@
 """大模型调用封装模块 - 优化版"""
 import json
 import time
-from typing import Dict, Any, Optional
-from openai import OpenAI, APIError, APIConnectionError, RateLimitError
+import random
+from typing import Dict, Any, Optional, Callable
+from openai import OpenAI, APIError, APIConnectionError, RateLimitError, AuthenticationError
 
 from config.settings import AIConfig, settings
 from core.prompt_builder import get_system_prompt, build_user_prompt
 from utils.logger import get_logger
+from utils.cache import get_cache  # 顶层导入，避免重复 import
 
 logger = get_logger("ai_client")
 
@@ -66,6 +68,40 @@ def _clean_json_response(content: str) -> str:
     return content
 
 
+def _calculate_backoff(attempt: int, base_delay: float = 1.0, max_delay: float = 30.0) -> float:
+    """计算指数退避延迟（带随机抖动）
+
+    Args:
+        attempt: 当前尝试次数（从0开始）
+        base_delay: 基础延迟（秒）
+        max_delay: 最大延迟（秒）
+
+    Returns:
+        计算后的延迟时间
+    """
+    # 指数退避 + 随机抖动（0.5-1.5倍）
+    delay = min(base_delay * (2 ** attempt), max_delay)
+    jitter = delay * (0.5 + random.random())  # 0.5-1.5 倍的抖动
+    return min(jitter, max_delay)
+
+
+def _is_retryable_error(error: Exception) -> bool:
+    """判断错误是否可重试
+
+    Returns:
+        True 表示可重试，False 表示不可重试
+    """
+    # 不可重试的错误类型
+    if isinstance(error, AuthenticationError):
+        return False
+    if isinstance(error, APIError):
+        error_str = str(error).lower()
+        # 认证失败、无效请求等不可重试
+        if any(x in error_str for x in ["invalid_api_key", "401", "403", "invalid_request"]):
+            return False
+    return True
+
+
 def _call_api_with_retry(
     client: OpenAI,
     model_name: str,
@@ -74,10 +110,16 @@ def _call_api_with_retry(
     max_retries: int = 3,
     temperature: float = 0.7
 ) -> str:
-    """带重试机制的 API 调用"""
+    """带智能重试机制的 API 调用
+
+    特性：
+    - 指数退避 + 随机抖动
+    - 区分可重试/不可重试错误
+    - 自动解析 Retry-After 响应头
+    """
     is_claude = "claude" in model_name.lower()
     last_error = None
-    
+
     for attempt in range(max_retries):
         try:
             if is_claude:
@@ -101,7 +143,7 @@ def _call_api_with_retry(
                     max_tokens=8192,
                     response_format={"type": "json_object"}
                 )
-            
+
             # 提取响应内容
             content = None
             if isinstance(response, str):
@@ -109,40 +151,55 @@ def _call_api_with_retry(
             elif hasattr(response, 'choices') and response.choices:
                 message = response.choices[0].message
                 content = message.content if message else None
-            
+
             # 检查内容是否为空
             if not content:
                 raise AIClientError("AI 返回了空内容，请重试或更换模型")
-            
+
             return content
-            
+
+        except AuthenticationError as e:
+            # 认证错误不重试，直接抛出
+            raise APIKeyError(f"API Key 无效或认证失败: {e}")
+
         except RateLimitError as e:
             last_error = e
             if attempt < max_retries - 1:
-                wait_time = (2 ** attempt) * 2  # 指数退避: 2, 4, 8 秒
-                logger.warning(f"API 限流，{wait_time} 秒后重试...")
+                # 尝试从响应中获取 Retry-After
+                retry_after = getattr(e, 'retry_after', None)
+                if retry_after:
+                    wait_time = float(retry_after)
+                else:
+                    wait_time = _calculate_backoff(attempt, base_delay=2.0, max_delay=60.0)
+                logger.warning(f"API 限流（第 {attempt + 1} 次），{wait_time:.1f} 秒后重试...")
                 time.sleep(wait_time)
             else:
                 raise RateLimitExceeded(f"API 限流，已重试 {max_retries} 次: {e}")
-                
+
         except APIConnectionError as e:
             last_error = e
             if attempt < max_retries - 1:
-                wait_time = (2 ** attempt)
-                logger.warning(f"网络错误，{wait_time} 秒后重试...")
+                wait_time = _calculate_backoff(attempt, base_delay=1.0, max_delay=30.0)
+                logger.warning(f"网络错误（第 {attempt + 1} 次），{wait_time:.1f} 秒后重试...")
                 time.sleep(wait_time)
             else:
                 raise NetworkError(f"网络连接失败，已重试 {max_retries} 次: {e}")
-                
+
         except APIError as e:
-            if "invalid_api_key" in str(e).lower() or "401" in str(e):
-                raise APIKeyError(f"API Key 无效: {e}")
+            # 检查是否可重试
+            if not _is_retryable_error(e):
+                if "invalid_api_key" in str(e).lower() or "401" in str(e):
+                    raise APIKeyError(f"API Key 无效: {e}")
+                raise AIClientError(f"API 错误（不可重试）: {e}")
+
             last_error = e
             if attempt < max_retries - 1:
-                time.sleep(1)
+                wait_time = _calculate_backoff(attempt, base_delay=1.0, max_delay=15.0)
+                logger.warning(f"API 错误（第 {attempt + 1} 次），{wait_time:.1f} 秒后重试...")
+                time.sleep(wait_time)
             else:
                 raise AIClientError(f"API 调用失败: {e}")
-    
+
     raise AIClientError(f"API 调用失败: {last_error}")
 
 
@@ -182,11 +239,11 @@ def generate_ppt_plan(
     description: str = "",
     auto_page_count: bool = False,
     config: Optional[AIConfig] = None,
-    progress_callback: callable = None,
+    progress_callback: Optional[Callable[[int, int, str], None]] = None,
     use_cache: bool = True
 ) -> Dict[str, Any]:
     """调用大模型生成 PPT 结构（支持分批生成大型 PPT）
-    
+
     Args:
         topic: PPT 主题
         audience: 目标受众
@@ -196,10 +253,10 @@ def generate_ppt_plan(
         config: AI 配置（可选，默认使用环境变量）
         progress_callback: 进度回调函数，接收 (current_batch, total_batches, message)
         use_cache: 是否使用缓存（默认开启）
-        
+
     Returns:
         包含 PPT 结构的字典
-        
+
     Raises:
         AIClientError: 当 API 调用失败时
         JSONParseError: 当返回格式错误时
@@ -207,12 +264,11 @@ def generate_ppt_plan(
     # 使用传入的配置或默认配置
     if config is None:
         config = settings.to_ai_config()
-    
+
     config.validate()
-    
+
     # 尝试从缓存获取
     if use_cache and not auto_page_count:
-        from utils.cache import get_cache
         cache = get_cache()
         cached = cache.get(topic, audience, page_count, description, config.model_name)
         if cached:
@@ -235,10 +291,9 @@ def generate_ppt_plan(
     
     # 保存到缓存
     if use_cache and not auto_page_count:
-        from utils.cache import get_cache
         cache = get_cache()
         cache.set(topic, audience, page_count, result, description, config.model_name)
-    
+
     return result
 
 
@@ -248,10 +303,9 @@ def _generate_ppt_plan_batched(
     batches: list,
     description: str,
     config: AIConfig,
-    progress_callback: callable = None
+    progress_callback: Optional[Callable[[int, int, str], None]] = None
 ) -> Dict[str, Any]:
     """分批生成 PPT 结构"""
-    from core.prompt_builder import get_system_prompt
     
     client = OpenAI(
         api_key=config.api_key,

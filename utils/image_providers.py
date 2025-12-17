@@ -11,6 +11,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from enum import Enum
 
+from utils.logger import get_logger
+
+logger = get_logger("image_providers")
+
 
 class ImageProvider(Enum):
     """图片提供者枚举"""
@@ -58,7 +62,7 @@ class BaseImageProvider(ABC):
                 f.write(response.content)
             return filepath
         except Exception as e:
-            print(f"下载图片失败: {e}")
+            logger.error(f"下载图片失败: {e}")
             return None
 
 
@@ -96,7 +100,7 @@ class UnsplashProvider(BaseImageProvider):
                 ))
             return results
         except Exception as e:
-            print(f"Unsplash 搜索失败: {e}")
+            logger.error(f"Unsplash 搜索失败: {e}")
             return []
 
 
@@ -134,7 +138,7 @@ class PexelsProvider(BaseImageProvider):
                 ))
             return results
         except Exception as e:
-            print(f"Pexels 搜索失败: {e}")
+            logger.error(f"Pexels 搜索失败: {e}")
             return []
 
 
@@ -177,7 +181,7 @@ class PixabayProvider(BaseImageProvider):
                 ))
             return results
         except Exception as e:
-            print(f"Pixabay 搜索失败: {e}")
+            logger.error(f"Pixabay 搜索失败: {e}")
             return []
 
 
@@ -227,7 +231,7 @@ class DalleProvider(BaseImageProvider):
                 ))
             return results
         except Exception as e:
-            print(f"DALL-E 生成失败: {e}")
+            logger.error(f"DALL-E 生成失败: {e}")
             return []
 
     def generate_image(self, prompt: str, size: str = "1792x1024") -> Optional[str]:
@@ -257,7 +261,8 @@ class LocalImageProvider(BaseImageProvider):
             try:
                 with open(self.index_file, 'r', encoding='utf-8') as f:
                     self._index = json.load(f)
-            except:
+            except (IOError, json.JSONDecodeError) as e:
+                logger.warning(f"加载图片索引失败: {e}")
                 self._index = {}
 
     def _save_index(self):
@@ -266,7 +271,7 @@ class LocalImageProvider(BaseImageProvider):
             with open(self.index_file, 'w', encoding='utf-8') as f:
                 json.dump(self._index, f, ensure_ascii=False, indent=2)
         except Exception as e:
-            print(f"保存索引失败: {e}")
+            logger.error(f"保存索引失败: {e}")
 
     def add_image(self, filepath: str, keywords: List[str], description: str = ""):
         """添加图片到库"""
@@ -428,7 +433,8 @@ class MultiSourceImageSearcher:
             if os.path.exists(self._cache_file):
                 with open(self._cache_file, 'r', encoding='utf-8') as f:
                     self._cache = json.load(f)
-        except:
+        except (IOError, json.JSONDecodeError) as e:
+            logger.warning(f"加载图片缓存失败: {e}")
             self._cache = {}
 
     def _save_cache(self):
@@ -436,8 +442,8 @@ class MultiSourceImageSearcher:
         try:
             with open(self._cache_file, 'w', encoding='utf-8') as f:
                 json.dump(self._cache, f, ensure_ascii=False, indent=2)
-        except:
-            pass
+        except Exception as e:
+            logger.warning(f"保存图片缓存失败: {e}")
 
     def _make_cache_key(self, keyword: str, provider: str = None) -> str:
         """生成缓存键"""
@@ -474,13 +480,13 @@ class MultiSourceImageSearcher:
         if cache_key in self._cache:
             cached_path = self._cache[cache_key]
             if os.path.exists(cached_path):
-                print(f"✓ 使用缓存图片: {cached_path}")
+                logger.debug(f"使用缓存图片: {cached_path}")
                 return cached_path
 
         # 搜索图片
         results = self.search(keyword, provider, index + 3)
         if not results or index >= len(results):
-            print(f"未找到关键词 '{keyword}' 的图片")
+            logger.warning(f"未找到关键词 '{keyword}' 的图片")
             return None
 
         # 下载图片
@@ -507,7 +513,7 @@ class MultiSourceImageSearcher:
     def generate_ai_image(self, prompt: str) -> Optional[str]:
         """使用 DALL-E 生成图片"""
         if "dalle" not in self.providers:
-            print("DALL-E 未配置，请设置 OpenAI API Key")
+            logger.warning("DALL-E 未配置，请设置 OpenAI API Key")
             return None
 
         return self.providers["dalle"].generate_image(prompt)
@@ -527,7 +533,7 @@ class MultiSourceImageSearcher:
                 try:
                     results[keyword] = future.result()
                 except Exception as e:
-                    print(f"下载 '{keyword}' 失败: {e}")
+                    logger.error(f"下载 '{keyword}' 失败: {e}")
                     results[keyword] = None
 
         return results

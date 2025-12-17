@@ -1,6 +1,189 @@
-"""Prompt 模板构建模块 - 内容充实版"""
+"""Prompt 模板构建模块 - 增强版（行业特定提示词、智能页面分配、逻辑连贯性）"""
+from typing import Dict, Optional, Tuple
+import re
 
-# 系统提示词常量
+
+# ==================== 行业特定提示词配置 ====================
+
+INDUSTRY_PROMPTS: Dict[str, Dict[str, str]] = {
+    "tech": {
+        "name": "科技/互联网",
+        "style": "逻辑清晰、数据驱动、前沿趋势",
+        "vocabulary": "技术架构、迭代优化、用户体验、数据驱动、敏捷开发、云原生、微服务",
+        "examples": "以具体的技术指标和性能数据为支撑，如TPS、延迟、可用性等",
+        "tone": "专业、前瞻、创新",
+        "keywords": ["技术", "开发", "软件", "AI", "人工智能", "互联网", "数字化", "系统", "架构", "云", "数据"],
+    },
+    "finance": {
+        "name": "金融/投资",
+        "style": "严谨专业、风险意识、合规导向",
+        "vocabulary": "投资回报率、风险管控、资产配置、流动性、合规要求、估值模型",
+        "examples": "引用市场数据、收益率、风险指标，注重合规性说明",
+        "tone": "审慎、专业、可信",
+        "keywords": ["金融", "投资", "银行", "保险", "基金", "股票", "财务", "风控", "合规", "收益"],
+    },
+    "education": {
+        "name": "教育/培训",
+        "style": "循序渐进、互动性强、案例丰富",
+        "vocabulary": "学习目标、知识点、实践练习、案例分析、能力提升、学习路径",
+        "examples": "使用生活化案例和类比，设置思考问题，强调实践应用",
+        "tone": "亲和、启发、鼓励",
+        "keywords": ["教育", "学习", "培训", "课程", "教学", "知识", "技能", "学生", "老师"],
+    },
+    "marketing": {
+        "name": "市场/营销",
+        "style": "数据洞察、用户导向、创意表达",
+        "vocabulary": "用户画像、转化率、品牌价值、市场份额、增长策略、营销漏斗",
+        "examples": "以具体的营销数据和成功案例说明，强调ROI和效果",
+        "tone": "有感染力、数据支撑、结果导向",
+        "keywords": ["营销", "市场", "品牌", "推广", "销售", "客户", "增长", "转化", "用户"],
+    },
+    "healthcare": {
+        "name": "医疗/健康",
+        "style": "科学严谨、循证医学、人文关怀",
+        "vocabulary": "临床研究、循证证据、治疗方案、预后评估、患者安全、医疗质量",
+        "examples": "引用研究数据和临床证据，注重安全性和有效性说明",
+        "tone": "专业、关怀、负责",
+        "keywords": ["医疗", "健康", "医院", "患者", "治疗", "药物", "临床", "诊断", "康复"],
+    },
+    "general": {
+        "name": "通用",
+        "style": "清晰简洁、重点突出、逻辑流畅",
+        "vocabulary": "核心要点、关键因素、实施步骤、预期效果、最佳实践",
+        "examples": "使用具体数据和案例支撑观点",
+        "tone": "专业、清晰、实用",
+        "keywords": [],
+    },
+}
+
+
+def detect_industry(topic: str, description: str = "") -> str:
+    """智能检测主题所属行业
+
+    Args:
+        topic: PPT主题
+        description: 详细描述
+
+    Returns:
+        行业代码
+    """
+    combined_text = f"{topic} {description}".lower()
+
+    # 计算每个行业的匹配分数
+    scores = {}
+    for industry, config in INDUSTRY_PROMPTS.items():
+        if industry == "general":
+            continue
+        keywords = config.get("keywords", [])
+        score = sum(1 for kw in keywords if kw.lower() in combined_text)
+        if score > 0:
+            scores[industry] = score
+
+    # 返回得分最高的行业，如果没有匹配则返回通用
+    if scores:
+        return max(scores, key=scores.get)
+    return "general"
+
+
+def get_industry_prompt_section(industry: str) -> str:
+    """获取行业特定的提示词部分
+
+    Args:
+        industry: 行业代码
+
+    Returns:
+        行业特定提示词
+    """
+    config = INDUSTRY_PROMPTS.get(industry, INDUSTRY_PROMPTS["general"])
+
+    return f"""
+【行业特化指导 - {config['name']}】
+- 表达风格：{config['style']}
+- 专业词汇：{config['vocabulary']}
+- 案例要求：{config['examples']}
+- 整体基调：{config['tone']}
+"""
+
+
+# ==================== 智能页面类型分配 ====================
+
+def calculate_page_distribution(total_pages: int, topic: str = "") -> Dict[str, int]:
+    """智能计算页面类型分配
+
+    根据总页数和主题智能分配不同类型页面的数量，
+    确保视觉多样性和内容节奏感。
+
+    Args:
+        total_pages: 总页数
+        topic: 主题（用于判断是否需要特定类型）
+
+    Returns:
+        各类型页面数量字典
+    """
+    # 基础分配比例
+    if total_pages <= 5:
+        return {
+            "quote": 1,
+            "bullets": max(1, total_pages - 3),
+            "image_with_text": 1,
+            "timeline": 0,
+            "comparison": 0,
+            "two_column": 0,
+            "ending": 1,
+        }
+
+    if total_pages <= 10:
+        return {
+            "quote": 1,
+            "bullets": max(2, total_pages - 6),
+            "image_with_text": 2,
+            "timeline": 1,
+            "comparison": 1,
+            "two_column": 0,
+            "ending": 1,
+        }
+
+    if total_pages <= 20:
+        bullets = int(total_pages * 0.45)
+        image_with_text = int(total_pages * 0.15)
+        timeline = max(1, int(total_pages * 0.1))
+        comparison = max(1, int(total_pages * 0.1))
+        quote = max(1, int(total_pages * 0.1))
+        two_column = max(0, total_pages - bullets - image_with_text - timeline - comparison - quote - 1)
+
+        return {
+            "quote": quote,
+            "bullets": bullets,
+            "image_with_text": image_with_text,
+            "timeline": timeline,
+            "comparison": comparison,
+            "two_column": two_column,
+            "ending": 1,
+        }
+
+    # 大型演示文稿（>20页）
+    bullets = int(total_pages * 0.4)
+    image_with_text = int(total_pages * 0.15)
+    timeline = max(2, int(total_pages * 0.1))
+    comparison = max(2, int(total_pages * 0.1))
+    quote = max(2, int(total_pages * 0.08))
+    two_column = max(1, int(total_pages * 0.07))
+    remaining = total_pages - bullets - image_with_text - timeline - comparison - quote - two_column - 1
+    bullets += remaining  # 将剩余页数分配给 bullets
+
+    return {
+        "quote": quote,
+        "bullets": bullets,
+        "image_with_text": image_with_text,
+        "timeline": timeline,
+        "comparison": comparison,
+        "two_column": two_column,
+        "ending": 1,
+    }
+
+
+# ==================== 系统提示词 ====================
+
 SYSTEM_PROMPT = """你是一位世界顶级的演示设计专家（Presentation Designer）。你擅长将内容转化为信息丰富、视觉美观且逻辑严密的 PPT 演示文稿。
 
 ⚠️⚠️⚠️ 极其重要的输出要求 ⚠️⚠️⚠️
@@ -15,6 +198,13 @@ SYSTEM_PROMPT = """你是一位世界顶级的演示设计专家（Presentation 
 2. 结构清晰 - 每个要点都要有完整的"概念+解释+价值"
 3. 数据支撑 - 尽量用具体数据和案例说明
 4. 逻辑严密 - 内容层层递进，有清晰的叙事线
+
+【逻辑连贯性要求 - 极其重要】
+1. 叙事主线：PPT 必须有清晰的叙事主线，从"是什么→为什么→怎么做→效果如何"层层推进
+2. 页面衔接：每页内容必须与前后页面有逻辑关联，不能跳跃
+3. 章节划分：使用 quote 页面作为章节分隔，引出下一部分内容
+4. 递进关系：内容从概念→原理→方法→案例→总结，循序渐进
+5. 首尾呼应：结束页要与开篇呼应，形成完整闭环
 
 【页面类型与内容要求】
 
@@ -154,43 +344,84 @@ def build_user_prompt(
     audience: str,
     page_count: int = 0,
     description: str = "",
-    auto_page_count: bool = False
+    auto_page_count: bool = False,
+    industry: str = ""
 ) -> str:
-    """构建用户提示词"""
+    """构建用户提示词
+
+    Args:
+        topic: PPT 主题
+        audience: 目标受众
+        page_count: 页数（auto_page_count=False 时使用）
+        description: 详细描述/参考资料
+        auto_page_count: 是否自动决定页数
+        industry: 行业代码（空则自动检测）
+
+    Returns:
+        构建好的用户提示词
+    """
+    # 智能行业检测
+    if not industry:
+        industry = detect_industry(topic, description)
+
     if auto_page_count:
-        return _build_auto_page_prompt(topic, audience, description)
-    return _build_fixed_page_prompt(topic, audience, page_count, description)
+        return _build_auto_page_prompt(topic, audience, description, industry)
+    return _build_fixed_page_prompt(topic, audience, page_count, description, industry)
 
 
-def _build_auto_page_prompt(topic: str, audience: str, description: str) -> str:
-    """构建自动页数模式的提示词"""
+def _build_auto_page_prompt(topic: str, audience: str, description: str, industry: str = "general") -> str:
+    """构建自动页数模式的提示词
+
+    Args:
+        topic: PPT 主题
+        audience: 目标受众
+        description: 详细描述
+        industry: 行业代码
+
+    Returns:
+        构建好的提示词
+    """
+    # 获取行业提示词
+    industry_section = get_industry_prompt_section(industry)
+
     prompt = f"""请为以下主题创作一份专业的 PPT 演示文稿：
 
 主题：{topic}
 目标受众：{audience}
-页数：根据内容复杂度自行决定（建议 8-20 页）"""
+页数：根据内容复杂度自行决定（建议 8-20 页）
+{industry_section}"""
 
     if description:
-        prompt += f"\n\n【参考资料/要求】\n{description}"
+        prompt += f"\n【参考资料/要求】\n{description}"
 
     prompt += _get_common_requirements()
     return prompt
 
 
-def _build_fixed_page_prompt(topic: str, audience: str, page_count: int, description: str) -> str:
-    """构建固定页数模式的提示词"""
-    # 计算各类型页面数量建议
-    timeline_pages = max(1, page_count // 8)
-    comparison_pages = max(1, page_count // 8)
-    quote_pages = max(1, page_count // 10)
-    image_pages = max(2, page_count // 6)
-    bullet_pages = page_count - timeline_pages - comparison_pages - quote_pages - image_pages - 1
+def _build_fixed_page_prompt(topic: str, audience: str, page_count: int, description: str, industry: str = "general") -> str:
+    """构建固定页数模式的提示词
+
+    Args:
+        topic: PPT 主题
+        audience: 目标受众
+        page_count: 页数要求
+        description: 详细描述
+        industry: 行业代码
+
+    Returns:
+        构建好的提示词
+    """
+    # 使用智能页面分配算法
+    distribution = calculate_page_distribution(page_count, topic)
+
+    # 获取行业提示词
+    industry_section = get_industry_prompt_section(industry)
 
     prompt = f"""请为以下主题创作一份专业的 PPT 演示文稿：
 
 主题：{topic}
 目标受众：{audience}
-
+{industry_section}
 ⚠️ 页数要求：{page_count} 页内容（不含封面，含结束页）"""
 
     if description:
@@ -199,12 +430,13 @@ def _build_fixed_page_prompt(topic: str, audience: str, page_count: int, descrip
     prompt += f"""
 
 【页面类型分配建议】确保视觉多样性
-- bullets：约 {bullet_pages} 页（核心内容，每页4-5个要点）
-- image_with_text：约 {image_pages} 页（概念可视化，文字150-200字）
-- timeline：约 {timeline_pages} 页（流程/历程，每节点35-50字）
-- comparison：约 {comparison_pages} 页（对比分析）
-- quote：约 {quote_pages} 页（金句/章节引入）
-- ending：1 页
+- bullets：约 {distribution['bullets']} 页（核心内容，每页4-5个要点）
+- image_with_text：约 {distribution['image_with_text']} 页（概念可视化，文字150-200字）
+- timeline：约 {distribution['timeline']} 页（流程/历程，每节点35-50字）
+- comparison：约 {distribution['comparison']} 页（对比分析）
+- quote：约 {distribution['quote']} 页（金句/章节引入）
+- two_column：约 {distribution['two_column']} 页（分类/并列展示）
+- ending：{distribution['ending']} 页
 
 【结构建议】
 {_generate_structure_suggestion(page_count)}

@@ -1,0 +1,66 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+.pytest_cache
+.mypy_cache
+.coverage
+htmlcov/
+.tox
+.nox
+.eggs
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+venv/
+.venv/
+ENV/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Output and cache files
+web/outputs/*
+web/uploads/*
+images/downloaded/*
+images/cache/*
+cache/*
+logs/*
+!.gitkeep
+
+# Documentation
+*.md
+!README.md
+
+# Tests and development
+tests/
+*.test.py
+Makefile
+requirements-dev.txt
+pyproject.toml
+.flake8
+.pre-commit-config.yaml
+
+# Docker
+Dockerfile
+docker-compose*.yml
+.dockerignore
