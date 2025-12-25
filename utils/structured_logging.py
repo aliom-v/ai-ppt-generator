@@ -6,7 +6,7 @@ import json
 import logging
 import sys
 import traceback
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 from dataclasses import dataclass, asdict
 
@@ -63,7 +63,7 @@ class JSONFormatter(logging.Formatter):
 
         # 构建日志记录
         log_record = LogRecord(
-            timestamp=datetime.utcnow().isoformat() + "Z",
+            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             level=record.levelname,
             logger=record.name,
             message=record.getMessage(),

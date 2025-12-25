@@ -240,6 +240,7 @@ async def _generate_ppt_plan_concurrent(
         timeout=config.timeout
     )
     semaphore = asyncio.Semaphore(3)  # 限制并发批次数
+    summary_lock = asyncio.Lock()  # 保护共享状态
 
     try:
         # 创建所有批次的任务
@@ -250,7 +251,7 @@ async def _generate_ppt_plan_concurrent(
             task = _generate_batch_async(
                 client, topic, audience, batch_pages, batch_idx,
                 total_batches, description, generated_summary,
-                config, semaphore, progress_callback
+                config, semaphore, progress_callback, summary_lock
             )
             tasks.append(task)
 
@@ -260,12 +261,13 @@ async def _generate_ppt_plan_concurrent(
             batch_idx, batch_result = await coro
             batch_results.append((batch_idx, batch_result))
 
-            # 更新生成的摘要列表
-            slides = batch_result.get("slides", [])
-            for slide in slides:
-                slide_title = slide.get("title", "")
-                if slide_title:
-                    generated_summary.append(slide_title)
+            # 更新生成的摘要列表（加锁保护）
+            async with summary_lock:
+                slides = batch_result.get("slides", [])
+                for slide in slides:
+                    slide_title = slide.get("title", "")
+                    if slide_title:
+                        generated_summary.append(slide_title)
 
         # 按批次顺序合并结果
         batch_results.sort(key=lambda x: x[0])
@@ -313,7 +315,8 @@ async def _generate_batch_async(
     generated_summary: List[str],
     config: AIConfig,
     semaphore: asyncio.Semaphore,
-    progress_callback: Optional[Callable[[int, int, str], None]]
+    progress_callback: Optional[Callable[[int, int, str], None]],
+    summary_lock: asyncio.Lock = None
 ) -> tuple:
     """异步生成单个批次"""
 

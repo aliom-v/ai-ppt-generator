@@ -3,7 +3,8 @@ import os
 import pytest
 
 from core.ppt_plan import ppt_plan_from_dict
-from ppt.unified_builder import build_ppt_from_plan, get_default_fonts, ColorTheme
+from ppt.unified_builder import build_ppt_from_plan
+from ppt.styles import FONT_CN, FONT_EN, ColorTheme
 
 
 class TestPptBuilder:
@@ -11,11 +12,10 @@ class TestPptBuilder:
 
     def test_get_default_fonts(self):
         """测试获取默认字体"""
-        cn_font, en_font = get_default_fonts()
-        assert isinstance(cn_font, str)
-        assert isinstance(en_font, str)
-        assert len(cn_font) > 0
-        assert len(en_font) > 0
+        assert isinstance(FONT_CN, str)
+        assert isinstance(FONT_EN, str)
+        assert len(FONT_CN) > 0
+        assert len(FONT_EN) > 0
 
     def test_color_theme(self):
         """测试颜色主题"""

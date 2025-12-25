@@ -66,3 +66,4 @@ desktop.ini
 
 # 生成缓存
 cache/
+.secret_key

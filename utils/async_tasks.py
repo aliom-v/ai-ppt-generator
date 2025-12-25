@@ -89,6 +89,9 @@ class TaskManager:
         task = TaskInfo(task_id=task_id, status=TaskStatus.PENDING)
 
         with self._lock:
+            # 清理超时的 RUNNING 任务
+            self._cleanup_stale_tasks()
+
             # LRU 清理：删除最旧的已完成任务
             while len(self._tasks) >= self._max_tasks:
                 oldest_id = next(iter(self._tasks))
@@ -102,6 +105,28 @@ class TaskManager:
 
         logger.info(f"创建任务: {task_id}")
         return task_id
+
+    def _cleanup_stale_tasks(self, stale_timeout: int = 3600) -> int:
+        """清理超时的 RUNNING 任务（防止内存泄漏）
+
+        Args:
+            stale_timeout: 超时时间（秒），默认 1 小时
+
+        Returns:
+            清理的任务数量
+        """
+        now = time.time()
+        cleaned = 0
+        for task_id, task in list(self._tasks.items()):
+            if task.status == TaskStatus.RUNNING:
+                started = task.started_at or task.created_at
+                if (now - started) > stale_timeout:
+                    task.status = TaskStatus.FAILED
+                    task.error = "任务执行超时"
+                    task.completed_at = now
+                    logger.warning(f"任务超时已清理: {task_id}")
+                    cleaned += 1
+        return cleaned
 
     def get_task(self, task_id: str) -> Optional[TaskInfo]:
         """获取任务信息"""
@@ -186,6 +211,8 @@ class TaskManager:
                 with self._lock:
                     task = self._tasks.get(task_id)
                     if not task or task.status == TaskStatus.CANCELLED:
+                        # 任务已取消，需要释放信号量
+                        self._semaphore.release()
                         return
                     self._running_count += 1
 
@@ -225,7 +252,8 @@ class TaskManager:
                 )
             finally:
                 with self._lock:
-                    self._running_count -= 1
+                    if self._running_count > 0:
+                        self._running_count -= 1
                 self._semaphore.release()
 
         thread = threading.Thread(target=wrapper, daemon=True)

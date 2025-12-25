@@ -81,22 +81,48 @@ class ImageConfig:
         )
 
 
-@dataclass  
+def _get_or_create_secret_key() -> str:
+    """获取或创建持久化的 SECRET_KEY"""
+    from pathlib import Path
+
+    # 优先使用环境变量
+    key = os.getenv("SECRET_KEY")
+    if key:
+        return key
+
+    # 尝试从文件读取
+    key_file = Path(".secret_key")
+    if key_file.exists():
+        try:
+            return key_file.read_text().strip()
+        except Exception:
+            pass
+
+    # 生成新 key 并持久化
+    key = os.urandom(24).hex()
+    try:
+        key_file.write_text(key)
+    except Exception:
+        pass  # 无法写入时仍返回生成的 key
+    return key
+
+
+@dataclass
 class AppConfig:
     """应用配置"""
-    secret_key: str = field(default_factory=lambda: os.getenv("SECRET_KEY", os.urandom(24).hex()))
+    secret_key: str = field(default_factory=_get_or_create_secret_key)
     upload_folder: str = "web/uploads"
     output_folder: str = "web/outputs"
     max_upload_size: int = 10 * 1024 * 1024  # 10MB
     debug: bool = False
     host: str = "0.0.0.0"
     port: int = 5000
-    
+
     @classmethod
     def from_env(cls) -> "AppConfig":
         """从环境变量创建配置"""
         return cls(
-            secret_key=os.getenv("SECRET_KEY", os.urandom(24).hex()),
+            secret_key=_get_or_create_secret_key(),
             debug=os.getenv("DEBUG", "false").lower() == "true",
             port=int(os.getenv("PORT", "5000")),
         )

@@ -1,14 +1,22 @@
 """大模型调用封装模块 - 优化版"""
 import json
 import time
-import random
 from typing import Dict, Any, Optional, Callable
 from openai import OpenAI, APIError, APIConnectionError, RateLimitError, AuthenticationError
 
 from config.settings import AIConfig, settings
 from core.prompt_builder import get_system_prompt, build_user_prompt
+from core.ai_common import (
+    clean_json_response,
+    calculate_backoff,
+    is_retryable_error,
+    calculate_batches,
+    build_batch_prompt_first,
+    build_batch_prompt_continue,
+    build_json_error_message,
+)
 from utils.logger import get_logger
-from utils.cache import get_cache  # 顶层导入，避免重复 import
+from utils.cache import get_cache
 
 logger = get_logger("ai_client")
 
@@ -36,70 +44,6 @@ class JSONParseError(AIClientError):
 class NetworkError(AIClientError):
     """网络错误"""
     pass
-
-
-def _clean_json_response(content: str) -> str:
-    """清理 AI 返回的 JSON 内容"""
-    content = content.strip()
-    
-    # 移除 markdown 代码块
-    if content.startswith("```json"):
-        content = content[7:]
-    elif content.startswith("```"):
-        content = content[3:]
-    if content.endswith("```"):
-        content = content[:-3]
-    content = content.strip()
-    
-    # 提取 JSON 部分
-    first_brace = content.find('{')
-    last_brace = content.rfind('}')
-    if first_brace != -1 and last_brace != -1 and first_brace < last_brace:
-        content = content[first_brace:last_brace + 1]
-    
-    # 替换中文引号
-    content = content.replace('"', '"').replace('"', '"')
-    content = content.replace(''', "'").replace(''', "'")
-    
-    # 移除 BOM
-    if content.startswith('\ufeff'):
-        content = content[1:]
-    
-    return content
-
-
-def _calculate_backoff(attempt: int, base_delay: float = 1.0, max_delay: float = 30.0) -> float:
-    """计算指数退避延迟（带随机抖动）
-
-    Args:
-        attempt: 当前尝试次数（从0开始）
-        base_delay: 基础延迟（秒）
-        max_delay: 最大延迟（秒）
-
-    Returns:
-        计算后的延迟时间
-    """
-    # 指数退避 + 随机抖动（0.5-1.5倍）
-    delay = min(base_delay * (2 ** attempt), max_delay)
-    jitter = delay * (0.5 + random.random())  # 0.5-1.5 倍的抖动
-    return min(jitter, max_delay)
-
-
-def _is_retryable_error(error: Exception) -> bool:
-    """判断错误是否可重试
-
-    Returns:
-        True 表示可重试，False 表示不可重试
-    """
-    # 不可重试的错误类型
-    if isinstance(error, AuthenticationError):
-        return False
-    if isinstance(error, APIError):
-        error_str = str(error).lower()
-        # 认证失败、无效请求等不可重试
-        if any(x in error_str for x in ["invalid_api_key", "401", "403", "invalid_request"]):
-            return False
-    return True
 
 
 def _call_api_with_retry(
@@ -170,7 +114,7 @@ def _call_api_with_retry(
                 if retry_after:
                     wait_time = float(retry_after)
                 else:
-                    wait_time = _calculate_backoff(attempt, base_delay=2.0, max_delay=60.0)
+                    wait_time = calculate_backoff(attempt, base_delay=2.0, max_delay=60.0)
                 logger.warning(f"API 限流（第 {attempt + 1} 次），{wait_time:.1f} 秒后重试...")
                 time.sleep(wait_time)
             else:
@@ -179,7 +123,7 @@ def _call_api_with_retry(
         except APIConnectionError as e:
             last_error = e
             if attempt < max_retries - 1:
-                wait_time = _calculate_backoff(attempt, base_delay=1.0, max_delay=30.0)
+                wait_time = calculate_backoff(attempt, base_delay=1.0, max_delay=30.0)
                 logger.warning(f"网络错误（第 {attempt + 1} 次），{wait_time:.1f} 秒后重试...")
                 time.sleep(wait_time)
             else:
@@ -187,49 +131,20 @@ def _call_api_with_retry(
 
         except APIError as e:
             # 检查是否可重试
-            if not _is_retryable_error(e):
+            if not is_retryable_error(e):
                 if "invalid_api_key" in str(e).lower() or "401" in str(e):
                     raise APIKeyError(f"API Key 无效: {e}")
                 raise AIClientError(f"API 错误（不可重试）: {e}")
 
             last_error = e
             if attempt < max_retries - 1:
-                wait_time = _calculate_backoff(attempt, base_delay=1.0, max_delay=15.0)
+                wait_time = calculate_backoff(attempt, base_delay=1.0, max_delay=15.0)
                 logger.warning(f"API 错误（第 {attempt + 1} 次），{wait_time:.1f} 秒后重试...")
                 time.sleep(wait_time)
             else:
                 raise AIClientError(f"API 调用失败: {e}")
 
     raise AIClientError(f"API 调用失败: {last_error}")
-
-
-def _calculate_batches(page_count: int) -> list:
-    """计算分批策略
-    
-    规则：
-    - 35页及以下：1批
-    - 36-70页：2批
-    - 71-100页：3批
-    - 101-150页：3批（每批约50页）
-    - 151-200页：4批（每批约50页）
-    """
-    if page_count <= 35:
-        return [page_count]
-    elif page_count <= 70:
-        # 2批，尽量均分
-        half = page_count // 2
-        return [half, page_count - half]
-    elif page_count <= 100:
-        # 3批
-        third = page_count // 3
-        return [third, third, page_count - 2 * third]
-    elif page_count <= 150:
-        # 3批，每批约50页
-        return [50, 50, page_count - 100]
-    else:
-        # 4批，每批约50页，最多200页
-        page_count = min(page_count, 200)
-        return [50, 50, 50, page_count - 150]
 
 
 def generate_ppt_plan(
@@ -275,7 +190,7 @@ def generate_ppt_plan(
             return cached
     
     # 计算是否需要分批
-    batches = _calculate_batches(page_count) if not auto_page_count and page_count > 35 else [page_count]
+    batches = calculate_batches(page_count) if not auto_page_count and page_count > 35 else [page_count]
     total_batches = len(batches)
     
     if total_batches > 1:
@@ -306,13 +221,12 @@ def _generate_ppt_plan_batched(
     progress_callback: Optional[Callable[[int, int, str], None]] = None
 ) -> Dict[str, Any]:
     """分批生成 PPT 结构"""
-    
     client = OpenAI(
         api_key=config.api_key,
         base_url=config.api_base_url,
         timeout=config.timeout
     )
-    
+
     total_batches = len(batches)
     all_slides = []
     title = ""
@@ -332,12 +246,12 @@ def _generate_ppt_plan_batched(
         # 构建分批提示词
         if batch_idx == 0:
             # 第一批：生成开头部分
-            batch_prompt = _build_batch_prompt_first(
+            batch_prompt = build_batch_prompt_first(
                 topic, audience, batch_pages, total_batches, description
             )
         else:
             # 后续批次：续写
-            batch_prompt = _build_batch_prompt_continue(
+            batch_prompt = build_batch_prompt_continue(
                 topic, audience, batch_pages, current_batch, total_batches,
                 generated_summary, is_last=(current_batch == total_batches)
             )
@@ -354,7 +268,7 @@ def _generate_ppt_plan_batched(
                 temperature=config.temperature
             )
             
-            cleaned_content = _clean_json_response(content)
+            cleaned_content = clean_json_response(content)
             batch_result = json.loads(cleaned_content)
             
             # 提取标题（只从第一批获取）
@@ -391,61 +305,14 @@ def _generate_ppt_plan_batched(
     }
     
     logger.info(f"分批生成完成，共 {len(all_slides)} 页")
+
+    # 确保客户端资源被释放
+    try:
+        client.close()
+    except Exception:
+        pass
+
     return result
-
-
-def _build_batch_prompt_first(topic: str, audience: str, pages: int, total_batches: int, description: str) -> str:
-    """构建第一批的提示词"""
-    prompt = f"""请为以下主题创作 PPT 的【开头部分】：
-
-主题：{topic}
-目标受众：{audience}
-本批页数：{pages} 页（这是第 1/{total_batches} 批，后续还会继续生成）
-
-⚠️ 重要说明：
-- 这是分批生成的第一部分，请生成 PPT 的开头内容
-- 包含：封面信息（title, subtitle）+ 前 {pages} 页内容
-- 不要生成 ending 结束页（后续批次会生成）
-- 内容要完整，为后续批次留好衔接"""
-
-    if description:
-        prompt += f"\n\n【参考资料】\n{description}"
-    
-    prompt += """
-
-请生成 JSON 格式，包含 title、subtitle 和 slides 数组。"""
-    return prompt
-
-
-def _build_batch_prompt_continue(topic: str, audience: str, pages: int, 
-                                  current_batch: int, total_batches: int,
-                                  generated_summary: list, is_last: bool) -> str:
-    """构建续写批次的提示词"""
-    summary_text = "\n".join([f"- {t}" for t in generated_summary[-10:]])  # 最近10页摘要
-    
-    prompt = f"""请继续生成 PPT 的【第 {current_batch} 部分】：
-
-主题：{topic}
-目标受众：{audience}
-本批页数：{pages} 页（这是第 {current_batch}/{total_batches} 批）
-
-【已生成的内容摘要】（请续写，不要重复）：
-{summary_text}
-
-⚠️ 重要说明：
-- 这是续写部分，请接着上面的内容继续
-- 不要重复已生成的内容
-- 本批生成 {pages} 页新内容"""
-
-    if is_last:
-        prompt += "\n- 这是最后一批，请在最后添加 ending 结束页"
-    else:
-        prompt += "\n- 不要生成 ending 结束页（后续批次会生成）"
-    
-    prompt += """
-
-请生成 JSON 格式，只需要 slides 数组（不需要 title 和 subtitle）。"""
-    return prompt
 
 
 def _generate_ppt_plan_single(
@@ -462,12 +329,12 @@ def _generate_ppt_plan_single(
         base_url=config.api_base_url,
         timeout=config.timeout
     )
-    
+
     system_prompt = get_system_prompt()
     user_prompt = build_user_prompt(topic, audience, page_count, description, auto_page_count)
-    
+
     logger.info(f"生成 PPT: {topic} | 受众: {audience} | 模型: {config.model_name}")
-    
+
     try:
         content = _call_api_with_retry(
             client=client,
@@ -477,9 +344,9 @@ def _generate_ppt_plan_single(
             max_retries=config.max_retries,
             temperature=config.temperature
         )
-        
+
         logger.debug(f"AI 返回内容长度: {len(content)} 字符")
-        
+
         content_lower = content.strip().lower()
         if content_lower.startswith('<!doctype') or content_lower.startswith('<html') or '<html' in content_lower[:500]:
             raise AIClientError(
@@ -488,35 +355,29 @@ def _generate_ppt_plan_single(
                 f"2. 确保 URL 以 /v1 结尾\n"
                 f"3. API Key 是否有效"
             )
-        
-        cleaned_content = _clean_json_response(content)
-        
+
+        cleaned_content = clean_json_response(content)
+
         if not cleaned_content:
             raise JSONParseError(f"AI 返回了无效内容: {content[:300]}")
-        
+
         plan_dict = json.loads(cleaned_content)
-        
+
         return plan_dict
-        
+
     except json.JSONDecodeError as e:
-        error_msg = _build_json_error_message(e, locals().get('content', ''))
+        error_msg = build_json_error_message(e, locals().get('content', ''))
         raise JSONParseError(error_msg)
     except AIClientError:
         raise
     except Exception as e:
         raise AIClientError(f"生成失败: {e}")
-
-
-def _build_json_error_message(error: json.JSONDecodeError, content: str) -> str:
-    """构建 JSON 解析错误消息"""
-    msg = "AI 返回的内容不是有效的 JSON 格式。"
-    msg += f"  错误详情: {error}"
-    
-    if content:
-        preview = content[:200].replace('\n', ' ')
-        msg += f"  返回内容预览: {preview}"
-    
-    return msg
+    finally:
+        # 确保客户端资源被释放
+        try:
+            client.close()
+        except Exception:
+            pass
 
 
 def test_api_connection(config: AIConfig) -> Dict[str, Any]:

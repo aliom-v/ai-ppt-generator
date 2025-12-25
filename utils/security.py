@@ -85,6 +85,7 @@ class CSRFProtection:
     """CSRF 保护
 
     为表单请求添加 CSRF Token 验证。
+    Token 存储在 session 中，确保跨请求有效。
 
     用法:
         app = Flask(__name__)
@@ -104,20 +105,21 @@ class CSRFProtection:
             self.init_app(app)
 
     def init_app(self, app: Flask):
-        app.before_request(self._generate_token)
+        # 确保 session 可用
+        if not app.secret_key:
+            import warnings
+            warnings.warn("Flask secret_key 未设置，CSRF 保护可能无法正常工作")
 
         @app.context_processor
         def csrf_token_processor():
-            return {"csrf_token": self._get_token}
+            return {"csrf_token": self._get_or_create_token}
 
-    def _generate_token(self):
-        """为每个请求生成 CSRF Token"""
-        if "csrf_token" not in g:
-            g.csrf_token = secrets.token_hex(self.token_length)
-
-    def _get_token(self) -> str:
-        """获取当前请求的 CSRF Token"""
-        return getattr(g, "csrf_token", "")
+    def _get_or_create_token(self) -> str:
+        """获取或创建 CSRF Token（存储在 session 中）"""
+        from flask import session
+        if "csrf_token" not in session:
+            session["csrf_token"] = secrets.token_hex(self.token_length)
+        return session["csrf_token"]
 
     def exempt(self, view_func):
         """标记视图函数免于 CSRF 保护"""
@@ -132,13 +134,15 @@ class CSRFProtection:
                 return f(*args, **kwargs)
 
             if request.method in ("POST", "PUT", "DELETE", "PATCH"):
+                from flask import session
                 token = (
                     request.form.get("csrf_token")
                     or request.headers.get("X-CSRF-Token")
-                    or request.json.get("csrf_token") if request.is_json else None
+                    or (request.json.get("csrf_token") if request.is_json and request.json else None)
                 )
 
-                if not token or token != g.get("csrf_token"):
+                session_token = session.get("csrf_token")
+                if not token or not session_token or not secrets.compare_digest(token, session_token):
                     from flask import jsonify
                     return jsonify({"error": "CSRF Token 无效"}), 403
 

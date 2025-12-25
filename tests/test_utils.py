@@ -28,50 +28,62 @@ class TestRequestContext:
 class TestAPIResponse:
     """API 响应测试"""
 
-    def test_success_response(self):
+    @pytest.fixture
+    def app_context(self):
+        """创建 Flask 应用上下文"""
+        from flask import Flask
+        app = Flask(__name__)
+        app.config['TESTING'] = True
+        return app
+
+    def test_success_response(self, app_context):
         """测试成功响应"""
         from utils.api_response import APIResponse
         from utils.request_context import set_request_id, clear_request_id
 
-        set_request_id("test123")
-        try:
-            response, status = APIResponse.success(data={"key": "value"})
-            data = response.get_json()
-            assert data["success"] is True
-            assert data["data"]["key"] == "value"
-            assert data["request_id"] == "test123"
-            assert status == 200
-        finally:
-            clear_request_id()
+        with app_context.app_context():
+            set_request_id("test123")
+            try:
+                response, status = APIResponse.success(data={"key": "value"})
+                data = response.get_json()
+                assert data["success"] is True
+                assert data["data"]["key"] == "value"
+                assert data["request_id"] == "test123"
+                assert status == 200
+            finally:
+                clear_request_id()
 
-    def test_error_response(self):
+    def test_error_response(self, app_context):
         """测试错误响应"""
         from utils.api_response import APIResponse
         from utils.request_context import set_request_id, clear_request_id
 
-        set_request_id("test456")
-        try:
-            response, status = APIResponse.error(
-                message="测试错误",
-                code="TEST_ERROR",
-                status_code=400
-            )
-            data = response.get_json()
-            assert data["success"] is False
-            assert data["error"]["message"] == "测试错误"
-            assert data["error"]["code"] == "TEST_ERROR"
-            assert status == 400
-        finally:
-            clear_request_id()
+        with app_context.app_context():
+            set_request_id("test456")
+            try:
+                response, status = APIResponse.error(
+                    message="测试错误",
+                    code="TEST_ERROR",
+                    status_code=400
+                )
+                data = response.get_json()
+                assert data["success"] is False
+                assert data["error"]["message"] == "测试错误"
+                assert data["error"]["code"] == "TEST_ERROR"
+                assert status == 400
+            finally:
+                clear_request_id()
 
-    def test_validation_error(self):
+    def test_validation_error(self, app_context):
         """测试验证错误响应"""
         from utils.api_response import APIResponse
-        response, status = APIResponse.validation_error("字段无效", field="name")
-        data = response.get_json()
-        assert data["error"]["code"] == "VALIDATION_ERROR"
-        assert data["error"]["details"]["field"] == "name"
-        assert status == 400
+
+        with app_context.app_context():
+            response, status = APIResponse.validation_error("字段无效", field="name")
+            data = response.get_json()
+            assert data["error"]["code"] == "VALIDATION_ERROR"
+            assert data["error"]["details"]["field"] == "name"
+            assert status == 400
 
 
 class TestRateLimiter:

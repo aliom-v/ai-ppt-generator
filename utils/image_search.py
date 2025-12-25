@@ -19,14 +19,17 @@ RETRY_DELAY = 1  # 秒
 
 
 class ImageCache:
-    """图片缓存管理"""
-    
-    def __init__(self, cache_dir: str = "images/cache"):
+    """图片缓存管理（带延迟写入优化）"""
+
+    def __init__(self, cache_dir: str = "images/cache", write_delay: int = 5):
         self.cache_dir = cache_dir
         self.cache_file = os.path.join(cache_dir, "cache_index.json")
         self._cache: Dict[str, str] = {}
+        self._dirty = False  # 标记是否有未保存的更改
+        self._last_save = time.time()
+        self._write_delay = write_delay  # 延迟写入时间（秒）
         self._load_cache()
-    
+
     def _load_cache(self):
         """加载缓存索引"""
         Path(self.cache_dir).mkdir(parents=True, exist_ok=True)
@@ -36,15 +39,24 @@ class ImageCache:
                     self._cache = json.load(f)
             except (json.JSONDecodeError, IOError):
                 self._cache = {}  # 缓存文件损坏或无法读取
-    
-    def _save_cache(self):
-        """保存缓存索引"""
+
+    def _save_cache(self, force: bool = False):
+        """保存缓存索引（延迟写入）"""
+        if not self._dirty:
+            return
+
+        # 延迟写入：只有超过指定时间才写入
+        if not force and (time.time() - self._last_save) < self._write_delay:
+            return
+
         try:
             with open(self.cache_file, 'w', encoding='utf-8') as f:
                 json.dump(self._cache, f, ensure_ascii=False, indent=2)
+            self._dirty = False
+            self._last_save = time.time()
         except IOError:
             pass  # 无法写入缓存文件
-    
+
     def get(self, keyword: str) -> Optional[str]:
         """获取缓存的图片路径"""
         key = self._make_key(keyword)
@@ -52,16 +64,21 @@ class ImageCache:
         if path and os.path.exists(path):
             return path
         return None
-    
+
     def set(self, keyword: str, path: str):
-        """设置缓存"""
+        """设置缓存（延迟写入）"""
         key = self._make_key(keyword)
         self._cache[key] = path
-        self._save_cache()
-    
+        self._dirty = True
+        self._save_cache()  # 尝试保存（会检查延迟）
+
+    def flush(self):
+        """强制保存缓存"""
+        self._save_cache(force=True)
+
     def _make_key(self, keyword: str) -> str:
-        """生成缓存键"""
-        return hashlib.md5(keyword.lower().encode()).hexdigest()[:16]
+        """生成缓存键（使用 SHA256 避免碰撞）"""
+        return hashlib.sha256(keyword.lower().encode()).hexdigest()[:24]
 
 
 class ImageSearcher:
@@ -111,23 +128,69 @@ class ImageSearcher:
             logger.error(f"搜索图片失败: {e}")
             return []
     
-    def download_image(self, image_url: str, filename: Optional[str] = None) -> Optional[str]:
-        """下载单张图片（带重试机制）"""
+    def download_image(
+        self,
+        image_url: str,
+        filename: Optional[str] = None,
+        max_size_mb: float = 10.0
+    ) -> Optional[str]:
+        """下载单张图片（带重试机制和大小限制）
+
+        Args:
+            image_url: 图片 URL
+            filename: 保存的文件名
+            max_size_mb: 最大文件大小（MB），默认 10MB
+
+        Returns:
+            下载后的文件路径，失败返回 None
+        """
         last_error = None
+        max_size_bytes = int(max_size_mb * 1024 * 1024)
 
         for attempt in range(MAX_RETRIES):
             try:
-                response = requests.get(image_url, timeout=30)
-                response.raise_for_status()
+                # 使用流式下载，限制大小
+                with requests.get(image_url, timeout=self.config.download_timeout, stream=True) as response:
+                    response.raise_for_status()
 
-                if not filename:
-                    filename = f"image_{hash(image_url) % 100000}.jpg"
+                    # 检查 Content-Type
+                    content_type = response.headers.get('Content-Type', '')
+                    if not content_type.startswith('image/'):
+                        logger.warning(f"非图片类型: {content_type}")
+                        return None
 
-                filepath = os.path.join(self.download_dir, filename)
-                with open(filepath, "wb") as f:
-                    f.write(response.content)
+                    # 检查 Content-Length（如果有）
+                    content_length = response.headers.get('Content-Length')
+                    if content_length and int(content_length) > max_size_bytes:
+                        logger.warning(f"图片过大: {int(content_length) / 1024 / 1024:.1f}MB > {max_size_mb}MB")
+                        return None
 
-                return filepath
+                    if not filename:
+                        url_hash = hashlib.sha256(image_url.encode()).hexdigest()[:12]
+                        filename = f"image_{url_hash}.jpg"
+
+                    filepath = os.path.join(self.download_dir, filename)
+
+                    # 流式写入，同时检查大小
+                    downloaded_size = 0
+                    with open(filepath, "wb") as f:
+                        for chunk in response.iter_content(chunk_size=8192):
+                            if chunk:
+                                downloaded_size += len(chunk)
+                                if downloaded_size > max_size_bytes:
+                                    f.close()
+                                    os.remove(filepath)
+                                    logger.warning(f"图片下载超过大小限制: {max_size_mb}MB")
+                                    return None
+                                f.write(chunk)
+
+                    # 验证文件是否为有效图片
+                    if not self._validate_image_file(filepath):
+                        os.remove(filepath)
+                        logger.warning(f"下载的文件不是有效图片")
+                        return None
+
+                    return filepath
 
             except requests.exceptions.Timeout as e:
                 last_error = e
@@ -145,6 +208,33 @@ class ImageSearcher:
 
         logger.error(f"下载图片失败，已重试 {MAX_RETRIES} 次: {last_error}")
         return None
+
+    def _validate_image_file(self, filepath: str) -> bool:
+        """验证文件是否为有效图片（检查文件头魔数）"""
+        try:
+            with open(filepath, 'rb') as f:
+                header = f.read(16)
+
+            # 检查常见图片格式的魔数
+            # JPEG: FF D8 FF
+            if header[:3] == b'\xff\xd8\xff':
+                return True
+            # PNG: 89 50 4E 47 0D 0A 1A 0A
+            if header[:8] == b'\x89PNG\r\n\x1a\n':
+                return True
+            # GIF: 47 49 46 38
+            if header[:4] in (b'GIF8', b'GIF9'):
+                return True
+            # WebP: 52 49 46 46 ... 57 45 42 50
+            if header[:4] == b'RIFF' and header[8:12] == b'WEBP':
+                return True
+            # BMP: 42 4D
+            if header[:2] == b'BM':
+                return True
+
+            return False
+        except Exception:
+            return False
     
     def search_and_download(self, keyword: str, index: int = 0) -> Optional[str]:
         """搜索并下载图片（带缓存）"""

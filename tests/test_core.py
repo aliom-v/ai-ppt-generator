@@ -3,7 +3,7 @@ import json
 import pytest
 
 from core.ppt_plan import PptPlan, Slide, ppt_plan_from_dict, ppt_plan_to_dict
-from core.ai_client import _clean_json_response, _calculate_batches
+from core.ai_common import clean_json_response, calculate_batches
 from config.settings import AIConfig
 
 
@@ -39,52 +39,52 @@ class TestPptPlan:
 class TestAIClient:
     """AI 客户端测试"""
 
-    def test_clean_json_response_basic(self):
+    def testclean_json_response_basic(self):
         """测试基本 JSON 清理"""
         content = '{"title": "测试"}'
-        result = _clean_json_response(content)
+        result = clean_json_response(content)
         assert result == '{"title": "测试"}'
 
-    def test_clean_json_response_with_markdown(self):
+    def testclean_json_response_with_markdown(self):
         """测试带 markdown 代码块的 JSON 清理"""
         content = '```json\n{"title": "测试"}\n```'
-        result = _clean_json_response(content)
+        result = clean_json_response(content)
         assert json.loads(result)["title"] == "测试"
 
-    def test_clean_json_response_with_chinese_quotes(self):
+    def testclean_json_response_with_chinese_quotes(self):
         """测试中文引号替换"""
         content = '{"title": "测试"}'
-        result = _clean_json_response(content)
+        result = clean_json_response(content)
         parsed = json.loads(result)
         assert parsed["title"] == "测试"
 
-    def test_clean_json_response_extract_json(self):
+    def testclean_json_response_extract_json(self):
         """测试提取 JSON 部分"""
         content = 'Here is the JSON: {"title": "测试"} end of content'
-        result = _clean_json_response(content)
+        result = clean_json_response(content)
         parsed = json.loads(result)
         assert parsed["title"] == "测试"
 
-    def test_calculate_batches_small(self):
+    def testcalculate_batches_small(self):
         """测试小页数不分批"""
-        assert _calculate_batches(10) == [10]
-        assert _calculate_batches(35) == [35]
+        assert calculate_batches(10) == [10]
+        assert calculate_batches(35) == [35]
 
-    def test_calculate_batches_medium(self):
+    def testcalculate_batches_medium(self):
         """测试中等页数分批"""
-        batches = _calculate_batches(50)
+        batches = calculate_batches(50)
         assert len(batches) == 2
         assert sum(batches) == 50
 
-    def test_calculate_batches_large(self):
+    def testcalculate_batches_large(self):
         """测试大页数分批"""
-        batches = _calculate_batches(100)
+        batches = calculate_batches(100)
         assert len(batches) == 3
         assert sum(batches) == 100
 
-    def test_calculate_batches_max(self):
+    def testcalculate_batches_max(self):
         """测试最大页数分批"""
-        batches = _calculate_batches(200)
+        batches = calculate_batches(200)
         assert len(batches) == 4
         assert sum(batches) == 200
 

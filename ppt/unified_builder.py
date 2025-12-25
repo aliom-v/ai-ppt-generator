@@ -501,15 +501,15 @@ def _create_title_slide(prs: Presentation, title: str, subtitle: str):
     try:
         slide.shapes.title.text = title
         _set_font(slide.shapes.title.text_frame, font_size=44, bold=True)
-    except (AttributeError, IndexError):
-        pass  # 模板可能没有标题占位符
+    except (AttributeError, IndexError) as e:
+        logger.debug(f"封面页无标题占位符: {e}")
 
     try:
         if len(slide.placeholders) > 1:
             slide.placeholders[1].text = subtitle
             _set_font(slide.placeholders[1].text_frame, font_size=24)
-    except (AttributeError, IndexError):
-        pass  # 模板可能没有副标题占位符
+    except (AttributeError, IndexError) as e:
+        logger.debug(f"封面页无副标题占位符: {e}")
 
     return slide
 
@@ -1444,15 +1444,15 @@ def _create_ending_slide(prs: Presentation, slide_data: Slide, anim_builder=None
     try:
         slide.shapes.title.text = slide_data.title
         _set_font(slide.shapes.title.text_frame, font_size=44, bold=True)
-    except (AttributeError, IndexError):
-        pass  # 模板可能没有标题占位符
+    except (AttributeError, IndexError) as e:
+        logger.debug(f"结束页无标题占位符: {e}")
 
     try:
         if len(slide.placeholders) > 1:
             slide.placeholders[1].text = slide_data.subtitle or ""
             _set_font(slide.placeholders[1].text_frame, font_size=24)
-    except (AttributeError, IndexError):
-        pass  # 模板可能没有副标题占位符
+    except (AttributeError, IndexError) as e:
+        logger.debug(f"结束页无副标题占位符: {e}")
 
     # 添加页面切换效果
     if anim_builder and ANIMATION_AVAILABLE:

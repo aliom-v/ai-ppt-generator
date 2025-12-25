@@ -133,7 +133,16 @@ def cached_json_response(data: dict, max_age: int = 3600, etag: str = None):
 
 
 def validate_api_url(url: str) -> bool:
-    """验证 API URL 安全性（防止 SSRF）"""
+    """验证 API URL 安全性（防止 SSRF）
+
+    防护措施：
+    - 只允许 http/https 协议
+    - 禁止本地回环地址（IPv4/IPv6）
+    - 禁止内网地址（RFC 1918）
+    - 禁止链路本地地址
+    - 禁止十进制/八进制 IP 表示
+    - 禁止 IPv6 映射地址
+    """
     if not url:
         return False
     try:
@@ -141,34 +150,12 @@ def validate_api_url(url: str) -> bool:
         # 只允许 http/https
         if parsed.scheme not in ('http', 'https'):
             return False
-        # 禁止本地地址（防止 SSRF）
+
         host = parsed.hostname or ''
+        if not host:
+            return False
+
         host_lower = host.lower()
-
-        # 禁止本地回环地址
-        blocked_hosts = ('localhost', '127.0.0.1', '0.0.0.0', '::1')
-        if host_lower in blocked_hosts:
-            return False
-
-        # 禁止内网地址（RFC 1918）
-        # 10.0.0.0 - 10.255.255.255
-        if host.startswith('10.'):
-            return False
-        # 192.168.0.0 - 192.168.255.255
-        if host.startswith('192.168.'):
-            return False
-        # 172.16.0.0 - 172.31.255.255（注意：172.0-15 和 172.32+ 是公网）
-        if host.startswith('172.'):
-            try:
-                second_octet = int(host.split('.')[1])
-                if 16 <= second_octet <= 31:
-                    return False
-            except (IndexError, ValueError):
-                pass
-
-        # 禁止链路本地地址
-        if host.startswith('169.254.'):
-            return False
 
         # 禁止以 . 结尾的域名（可能绕过检查）
         if host_lower.endswith('.'):
@@ -177,6 +164,66 @@ def validate_api_url(url: str) -> bool:
         # 禁止带端口的本地服务
         if host_lower.endswith('.local') or host_lower.endswith('.internal'):
             return False
+
+        # 禁止本地回环地址
+        blocked_hosts = ('localhost', '127.0.0.1', '0.0.0.0', '::1', '[::1]')
+        if host_lower in blocked_hosts:
+            return False
+
+        # 尝试解析为 IP 地址进行更严格的检查
+        import ipaddress
+        try:
+            # 处理 IPv6 方括号格式
+            ip_str = host.strip('[]')
+            ip = ipaddress.ip_address(ip_str)
+
+            # 禁止所有私有/保留地址
+            if ip.is_private:
+                return False
+            if ip.is_loopback:
+                return False
+            if ip.is_link_local:
+                return False
+            if ip.is_multicast:
+                return False
+            if ip.is_reserved:
+                return False
+            if ip.is_unspecified:
+                return False
+
+            # 检查 IPv6 映射的 IPv4 地址（如 ::ffff:127.0.0.1）
+            if isinstance(ip, ipaddress.IPv6Address):
+                if ip.ipv4_mapped:
+                    mapped_v4 = ip.ipv4_mapped
+                    if mapped_v4.is_private or mapped_v4.is_loopback or mapped_v4.is_link_local:
+                        return False
+
+        except ValueError:
+            # 不是 IP 地址，是域名，进行域名检查
+            # 禁止内网地址（RFC 1918）- 通过域名形式
+            if host.startswith('10.'):
+                return False
+            if host.startswith('192.168.'):
+                return False
+            if host.startswith('172.'):
+                try:
+                    second_octet = int(host.split('.')[1])
+                    if 16 <= second_octet <= 31:
+                        return False
+                except (IndexError, ValueError):
+                    pass
+            if host.startswith('169.254.'):
+                return False
+            # 检查是否是十进制 IP（如 2130706433 = 127.0.0.1）
+            if host.isdigit():
+                try:
+                    decimal_ip = int(host)
+                    if 0 <= decimal_ip <= 0xFFFFFFFF:
+                        ip = ipaddress.ip_address(decimal_ip)
+                        if ip.is_private or ip.is_loopback or ip.is_link_local:
+                            return False
+                except (ValueError, OverflowError):
+                    pass
 
         return True
     except Exception:
@@ -381,20 +428,25 @@ def generate_ppt():
 def download_ppt(filename):
     """下载 PPT"""
     try:
-        filepath = os.path.abspath(os.path.join(app.config['OUTPUT_FOLDER'], filename))
-        output_folder = os.path.abspath(app.config['OUTPUT_FOLDER'])
-        
-        # 安全检查
-        if not filepath.startswith(output_folder):
+        # 安全检查：防止路径遍历攻击
+        safe_filename = secure_filename(filename)
+        if not safe_filename or safe_filename != filename.replace('/', '_').replace('\\', '_'):
+            return jsonify({'error': '非法的文件名'}), 403
+
+        output_folder = Path(app.config['OUTPUT_FOLDER']).resolve()
+        filepath = (output_folder / safe_filename).resolve()
+
+        # 确保文件在输出目录内
+        if not filepath.is_relative_to(output_folder):
             return jsonify({'error': '非法的文件路径'}), 403
         
-        if not os.path.exists(filepath):
+        if not filepath.exists():
             return jsonify({'error': f'文件不存在: {filename}'}), 404
-        
+
         return send_file(
             filepath,
             as_attachment=True,
-            download_name=filename,
+            download_name=safe_filename,
             mimetype='application/vnd.openxmlformats-officedocument.presentationml.presentation'
         )
     except Exception as e:
@@ -1101,6 +1153,36 @@ def list_batch_jobs():
 
 # ==================== PPT 编辑 API ====================
 
+def _validate_ppt_filepath(filename: str) -> tuple:
+    """验证 PPT 文件路径安全性
+
+    Args:
+        filename: 文件名
+
+    Returns:
+        (filepath, error_response) - 如果验证通过，error_response 为 None
+    """
+    try:
+        output_folder = Path(app.config['OUTPUT_FOLDER']).resolve()
+        safe_filename = secure_filename(filename)
+
+        if not safe_filename:
+            return None, (jsonify({'success': False, 'error': '非法的文件名'}), 403)
+
+        filepath = (output_folder / safe_filename).resolve()
+
+        # 确保文件在输出目录内（防止路径遍历）
+        if not filepath.is_relative_to(output_folder):
+            return None, (jsonify({'success': False, 'error': '非法的文件路径'}), 403)
+
+        if not filepath.exists():
+            return None, (jsonify({'success': False, 'error': '文件不存在'}), 404)
+
+        return str(filepath), None
+    except Exception as e:
+        return None, (jsonify({'success': False, 'error': str(e)}), 500)
+
+
 @app.route('/api/ppt/<path:filename>/info')
 def get_ppt_info(filename):
     """获取 PPT 文件信息
@@ -1109,17 +1191,11 @@ def get_ppt_info(filename):
     """
     from ppt.editor import PPTEditor
 
+    filepath, error = _validate_ppt_filepath(filename)
+    if error:
+        return error
+
     try:
-        filepath = os.path.abspath(os.path.join(app.config['OUTPUT_FOLDER'], filename))
-        output_folder = os.path.abspath(app.config['OUTPUT_FOLDER'])
-
-        # 安全检查
-        if not filepath.startswith(output_folder):
-            return jsonify({'success': False, 'error': '非法的文件路径'}), 403
-
-        if not os.path.exists(filepath):
-            return jsonify({'success': False, 'error': '文件不存在'}), 404
-
         editor = PPTEditor(filepath)
         return jsonify({
             'success': True,
@@ -1134,16 +1210,11 @@ def get_slide_info(filename, index):
     """获取指定幻灯片信息"""
     from ppt.editor import PPTEditor
 
+    filepath, error = _validate_ppt_filepath(filename)
+    if error:
+        return error
+
     try:
-        filepath = os.path.abspath(os.path.join(app.config['OUTPUT_FOLDER'], filename))
-        output_folder = os.path.abspath(app.config['OUTPUT_FOLDER'])
-
-        if not filepath.startswith(output_folder):
-            return jsonify({'success': False, 'error': '非法的文件路径'}), 403
-
-        if not os.path.exists(filepath):
-            return jsonify({'success': False, 'error': '文件不存在'}), 404
-
         editor = PPTEditor(filepath)
         info = editor.get_slide_info(index)
 
@@ -1173,16 +1244,11 @@ def update_slide_title(filename, index):
     """
     from ppt.editor import PPTEditor
 
+    filepath, error = _validate_ppt_filepath(filename)
+    if error:
+        return error
+
     try:
-        filepath = os.path.abspath(os.path.join(app.config['OUTPUT_FOLDER'], filename))
-        output_folder = os.path.abspath(app.config['OUTPUT_FOLDER'])
-
-        if not filepath.startswith(output_folder):
-            return jsonify({'success': False, 'error': '非法的文件路径'}), 403
-
-        if not os.path.exists(filepath):
-            return jsonify({'success': False, 'error': '文件不存在'}), 404
-
         data = request.json or {}
         new_title = data.get('title', '')
 
@@ -1205,16 +1271,11 @@ def delete_slide(filename, index):
     """删除幻灯片"""
     from ppt.editor import PPTEditor
 
+    filepath, error = _validate_ppt_filepath(filename)
+    if error:
+        return error
+
     try:
-        filepath = os.path.abspath(os.path.join(app.config['OUTPUT_FOLDER'], filename))
-        output_folder = os.path.abspath(app.config['OUTPUT_FOLDER'])
-
-        if not filepath.startswith(output_folder):
-            return jsonify({'success': False, 'error': '非法的文件路径'}), 403
-
-        if not os.path.exists(filepath):
-            return jsonify({'success': False, 'error': '文件不存在'}), 404
-
         editor = PPTEditor(filepath)
         if editor.delete_slide(index):
             editor.save()
@@ -1238,16 +1299,11 @@ def reorder_slides(filename):
     """
     from ppt.editor import PPTEditor
 
+    filepath, error = _validate_ppt_filepath(filename)
+    if error:
+        return error
+
     try:
-        filepath = os.path.abspath(os.path.join(app.config['OUTPUT_FOLDER'], filename))
-        output_folder = os.path.abspath(app.config['OUTPUT_FOLDER'])
-
-        if not filepath.startswith(output_folder):
-            return jsonify({'success': False, 'error': '非法的文件路径'}), 403
-
-        if not os.path.exists(filepath):
-            return jsonify({'success': False, 'error': '文件不存在'}), 404
-
         data = request.json or {}
         new_order = data.get('order', [])
 
@@ -1287,15 +1343,11 @@ def duplicate_slide(filename, index):
     """复制幻灯片"""
     from ppt.editor import PPTEditor
 
+    filepath, error = _validate_ppt_filepath(filename)
+    if error:
+        return error
+
     try:
-        filepath = os.path.abspath(os.path.join(app.config['OUTPUT_FOLDER'], filename))
-        output_folder = os.path.abspath(app.config['OUTPUT_FOLDER'])
-
-        if not filepath.startswith(output_folder):
-            return jsonify({'success': False, 'error': '非法的文件路径'}), 403
-
-        if not os.path.exists(filepath):
-            return jsonify({'success': False, 'error': '文件不存在'}), 404
 
         editor = PPTEditor(filepath)
         new_index = editor.duplicate_slide(index)
@@ -1339,17 +1391,12 @@ def export_to_pdf(filename):
     """
     from utils.export import get_export_manager, ExportError
 
+    filepath, error = _validate_ppt_filepath(filename)
+    if error:
+        return error
+
     try:
-        filepath = os.path.abspath(os.path.join(app.config['OUTPUT_FOLDER'], filename))
-        output_folder = os.path.abspath(app.config['OUTPUT_FOLDER'])
-
-        # 安全检查
-        if not filepath.startswith(output_folder):
-            return jsonify({'success': False, 'error': '非法的文件路径'}), 403
-
-        if not os.path.exists(filepath):
-            return jsonify({'success': False, 'error': '文件不存在'}), 404
-
+        output_folder = Path(app.config['OUTPUT_FOLDER']).resolve()
         manager = get_export_manager()
         if not manager.is_format_available('pdf'):
             return jsonify({
@@ -1359,7 +1406,7 @@ def export_to_pdf(filename):
 
         # 生成输出路径
         pdf_filename = Path(filename).stem + '.pdf'
-        output_path = os.path.join(output_folder, pdf_filename)
+        output_path = str(output_folder / pdf_filename)
 
         # 执行导出
         result_path = manager.export(filepath, output_path, 'pdf')
@@ -1387,17 +1434,12 @@ def export_to_images(filename):
     from utils.export import get_export_manager, ExportError
     import zipfile
 
+    filepath, error = _validate_ppt_filepath(filename)
+    if error:
+        return error
+
     try:
-        filepath = os.path.abspath(os.path.join(app.config['OUTPUT_FOLDER'], filename))
-        output_folder = os.path.abspath(app.config['OUTPUT_FOLDER'])
-
-        # 安全检查
-        if not filepath.startswith(output_folder):
-            return jsonify({'success': False, 'error': '非法的文件路径'}), 403
-
-        if not os.path.exists(filepath):
-            return jsonify({'success': False, 'error': '文件不存在'}), 404
-
+        output_folder = Path(app.config['OUTPUT_FOLDER']).resolve()
         manager = get_export_manager()
         if not manager.is_format_available('images'):
             return jsonify({
@@ -1446,17 +1488,12 @@ def export_thumbnail(filename):
     """
     from utils.export import get_export_manager, ExportError
 
+    filepath, error = _validate_ppt_filepath(filename)
+    if error:
+        return error
+
     try:
-        filepath = os.path.abspath(os.path.join(app.config['OUTPUT_FOLDER'], filename))
-        output_folder = os.path.abspath(app.config['OUTPUT_FOLDER'])
-
-        # 安全检查
-        if not filepath.startswith(output_folder):
-            return jsonify({'success': False, 'error': '非法的文件路径'}), 403
-
-        if not os.path.exists(filepath):
-            return jsonify({'success': False, 'error': '文件不存在'}), 404
-
+        output_folder = Path(app.config['OUTPUT_FOLDER']).resolve()
         manager = get_export_manager()
         if not manager.is_format_available('thumbnail'):
             return jsonify({
@@ -1466,7 +1503,7 @@ def export_thumbnail(filename):
 
         # 生成输出路径
         thumb_filename = Path(filename).stem + '_thumb.png'
-        output_path = os.path.join(output_folder, thumb_filename)
+        output_path = str(output_folder / thumb_filename)
 
         # 执行导出
         manager.export(filepath, output_path, 'thumbnail')
