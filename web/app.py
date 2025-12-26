@@ -15,7 +15,7 @@ if sys.platform == 'win32':
 # 添加项目根目录到路径
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from flask import Flask, render_template, jsonify
+from flask import Flask, render_template, jsonify, send_from_directory
 
 from utils.logger import get_logger
 from utils.request_context import RequestContextMiddleware
@@ -35,7 +35,18 @@ logger = get_logger("web")
 # 应用配置
 app_config = AppConfig.from_env()
 
-app = Flask(__name__)
+# 检查是否存在新版前端静态文件
+static_folder = Path(__file__).parent / 'static'
+use_new_frontend = (static_folder / 'index.html').exists()
+
+if use_new_frontend:
+    # 使用新版 React 前端
+    app = Flask(__name__, static_folder='static', static_url_path='')
+    logger.info("使用新版 React 前端")
+else:
+    # 使用旧版模板
+    app = Flask(__name__)
+    logger.info("使用旧版模板前端")
 app.config['SECRET_KEY'] = app_config.secret_key
 app.config['UPLOAD_FOLDER'] = app_config.upload_folder
 app.config['OUTPUT_FOLDER'] = app_config.output_folder
@@ -68,7 +79,18 @@ cleanup_old_files(app.config['OUTPUT_FOLDER'])
 @app.route('/')
 def index():
     """首页"""
+    if use_new_frontend:
+        return send_from_directory(app.static_folder, 'index.html')
     return render_template('index.html')
+
+
+# SPA 路由支持 - 处理前端路由
+@app.errorhandler(404)
+def not_found(e):
+    """处理 404，支持 SPA 路由"""
+    if use_new_frontend:
+        return send_from_directory(app.static_folder, 'index.html')
+    return jsonify({'error': 'Not found'}), 404
 
 
 @app.route('/health')
