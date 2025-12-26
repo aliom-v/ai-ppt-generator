@@ -504,6 +504,468 @@ def _register_endpoints(openapi: OpenAPIGenerator):
         ],
     ))
 
+    # 批量生成 API
+    openapi.register_endpoint(APIEndpoint(
+        path="/api/batch",
+        method="POST",
+        summary="创建批量生成任务",
+        description="批量生成多个 PPT，单次最多 20 个。",
+        tags=["生成", "任务"],
+        request_body=APIRequestBody(
+            description="批量生成参数",
+            schema={
+                "type": "object",
+                "required": ["items", "api_key"],
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "required": ["topic"],
+                            "properties": {
+                                "topic": {"type": "string"},
+                                "audience": {"type": "string"},
+                                "page_count": {"type": "integer"},
+                            }
+                        },
+                        "maxItems": 20,
+                    },
+                    "api_key": {"type": "string"},
+                    "api_base": {"type": "string"},
+                    "model_name": {"type": "string"},
+                    "template_id": {"type": "string"},
+                }
+            },
+            example={
+                "items": [
+                    {"topic": "人工智能简介", "page_count": 5},
+                    {"topic": "机器学习基础", "page_count": 8},
+                ],
+                "api_key": "sk-xxx",
+            },
+        ),
+        responses=[
+            APIResponse(200, "任务创建成功", example={
+                "success": True,
+                "job_id": "batch_abc123",
+                "total": 2,
+                "status_url": "/api/batch/batch_abc123",
+            }),
+            APIResponse(400, "参数错误"),
+        ],
+    ))
+
+    openapi.register_endpoint(APIEndpoint(
+        path="/api/batch/{job_id}",
+        method="GET",
+        summary="获取批量任务状态",
+        tags=["任务"],
+        parameters=[
+            APIParameter("job_id", "path", "批量任务 ID", required=True),
+        ],
+        responses=[
+            APIResponse(200, "任务状态"),
+            APIResponse(404, "任务不存在"),
+        ],
+    ))
+
+    openapi.register_endpoint(APIEndpoint(
+        path="/api/batch/{job_id}",
+        method="DELETE",
+        summary="取消批量任务",
+        tags=["任务"],
+        parameters=[
+            APIParameter("job_id", "path", "批量任务 ID", required=True),
+        ],
+        responses=[
+            APIResponse(200, "取消成功"),
+            APIResponse(400, "无法取消"),
+        ],
+    ))
+
+    openapi.register_endpoint(APIEndpoint(
+        path="/api/batch",
+        method="GET",
+        summary="列出批量任务",
+        tags=["任务"],
+        parameters=[
+            APIParameter("limit", "query", "返回数量", schema={"type": "integer", "default": 20}),
+        ],
+        responses=[
+            APIResponse(200, "任务列表"),
+        ],
+    ))
+
+    # PPT 编辑 API
+    openapi.register_endpoint(APIEndpoint(
+        path="/api/ppt/{filename}/info",
+        method="GET",
+        summary="获取 PPT 信息",
+        description="获取 PPT 文件的详细信息，包括幻灯片列表。",
+        tags=["编辑"],
+        parameters=[
+            APIParameter("filename", "path", "PPT 文件名", required=True),
+        ],
+        responses=[
+            APIResponse(200, "PPT 信息"),
+            APIResponse(404, "文件不存在"),
+        ],
+    ))
+
+    openapi.register_endpoint(APIEndpoint(
+        path="/api/ppt/{filename}/slide/{index}",
+        method="GET",
+        summary="获取幻灯片信息",
+        tags=["编辑"],
+        parameters=[
+            APIParameter("filename", "path", "PPT 文件名", required=True),
+            APIParameter("index", "path", "幻灯片索引（从 0 开始）", required=True, schema={"type": "integer"}),
+        ],
+        responses=[
+            APIResponse(200, "幻灯片信息"),
+            APIResponse(404, "幻灯片不存在"),
+        ],
+    ))
+
+    openapi.register_endpoint(APIEndpoint(
+        path="/api/ppt/{filename}/slide/{index}/title",
+        method="PUT",
+        summary="更新幻灯片标题",
+        tags=["编辑"],
+        parameters=[
+            APIParameter("filename", "path", "PPT 文件名", required=True),
+            APIParameter("index", "path", "幻灯片索引", required=True, schema={"type": "integer"}),
+        ],
+        request_body=APIRequestBody(
+            description="新标题",
+            schema={
+                "type": "object",
+                "required": ["title"],
+                "properties": {
+                    "title": {"type": "string"},
+                }
+            },
+            example={"title": "新标题"},
+        ),
+        responses=[
+            APIResponse(200, "更新成功"),
+            APIResponse(400, "更新失败"),
+            APIResponse(404, "文件不存在"),
+        ],
+    ))
+
+    openapi.register_endpoint(APIEndpoint(
+        path="/api/ppt/{filename}/slide/{index}",
+        method="DELETE",
+        summary="删除幻灯片",
+        tags=["编辑"],
+        parameters=[
+            APIParameter("filename", "path", "PPT 文件名", required=True),
+            APIParameter("index", "path", "幻灯片索引", required=True, schema={"type": "integer"}),
+        ],
+        responses=[
+            APIResponse(200, "删除成功"),
+            APIResponse(400, "删除失败"),
+            APIResponse(404, "文件不存在"),
+        ],
+    ))
+
+    openapi.register_endpoint(APIEndpoint(
+        path="/api/ppt/{filename}/reorder",
+        method="POST",
+        summary="重新排列幻灯片",
+        tags=["编辑"],
+        parameters=[
+            APIParameter("filename", "path", "PPT 文件名", required=True),
+        ],
+        request_body=APIRequestBody(
+            description="新的顺序",
+            schema={
+                "type": "object",
+                "required": ["order"],
+                "properties": {
+                    "order": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                        "description": "新的索引顺序，如 [2, 0, 1, 3]",
+                    }
+                }
+            },
+            example={"order": [2, 0, 1, 3]},
+        ),
+        responses=[
+            APIResponse(200, "重排成功"),
+            APIResponse(400, "重排失败"),
+        ],
+    ))
+
+    openapi.register_endpoint(APIEndpoint(
+        path="/api/ppt/{filename}/slide/{index}/duplicate",
+        method="POST",
+        summary="复制幻灯片",
+        tags=["编辑"],
+        parameters=[
+            APIParameter("filename", "path", "PPT 文件名", required=True),
+            APIParameter("index", "path", "幻灯片索引", required=True, schema={"type": "integer"}),
+        ],
+        responses=[
+            APIResponse(200, "复制成功", example={
+                "success": True,
+                "new_index": 3,
+                "slide_count": 5,
+            }),
+            APIResponse(400, "复制失败"),
+        ],
+    ))
+
+    # 导出 API
+    openapi.register_endpoint(APIEndpoint(
+        path="/api/export/formats",
+        method="GET",
+        summary="获取可用导出格式",
+        tags=["导出"],
+        responses=[
+            APIResponse(200, "格式列表", example={
+                "success": True,
+                "formats": ["pdf", "images", "thumbnail"],
+            }),
+        ],
+    ))
+
+    openapi.register_endpoint(APIEndpoint(
+        path="/api/export/{filename}/pdf",
+        method="POST",
+        summary="导出为 PDF",
+        description="将 PPT 导出为 PDF 格式。需要安装 LibreOffice。",
+        tags=["导出"],
+        parameters=[
+            APIParameter("filename", "path", "PPT 文件名", required=True),
+        ],
+        responses=[
+            APIResponse(200, "导出成功", example={
+                "success": True,
+                "filename": "presentation.pdf",
+                "download_url": "/api/download/presentation.pdf",
+            }),
+            APIResponse(404, "文件不存在"),
+            APIResponse(503, "导出服务不可用"),
+        ],
+    ))
+
+    openapi.register_endpoint(APIEndpoint(
+        path="/api/export/{filename}/images",
+        method="POST",
+        summary="导出为图片",
+        description="将 PPT 导出为图片序列，返回 ZIP 压缩包。",
+        tags=["导出"],
+        parameters=[
+            APIParameter("filename", "path", "PPT 文件名", required=True),
+        ],
+        responses=[
+            APIResponse(200, "导出成功", example={
+                "success": True,
+                "filename": "presentation_images.zip",
+                "image_count": 10,
+                "download_url": "/api/download/presentation_images.zip",
+            }),
+            APIResponse(404, "文件不存在"),
+            APIResponse(503, "导出服务不可用"),
+        ],
+    ))
+
+    openapi.register_endpoint(APIEndpoint(
+        path="/api/export/{filename}/thumbnail",
+        method="POST",
+        summary="生成缩略图",
+        description="生成 PPT 首页缩略图。",
+        tags=["导出"],
+        parameters=[
+            APIParameter("filename", "path", "PPT 文件名", required=True),
+        ],
+        responses=[
+            APIResponse(200, "生成成功", example={
+                "success": True,
+                "filename": "presentation_thumb.png",
+                "download_url": "/api/download/presentation_thumb.png",
+            }),
+            APIResponse(404, "文件不存在"),
+            APIResponse(503, "服务不可用"),
+        ],
+    ))
+
+    # 文件上传 API
+    openapi.register_endpoint(APIEndpoint(
+        path="/api/upload",
+        method="POST",
+        summary="上传文件",
+        description="上传文档文件（TXT, MD, DOCX, PDF）作为 PPT 生成的参考资料。",
+        tags=["生成"],
+        request_body=APIRequestBody(
+            description="文件上传",
+            content_type="multipart/form-data",
+            schema={
+                "type": "object",
+                "properties": {
+                    "file": {
+                        "type": "string",
+                        "format": "binary",
+                    }
+                }
+            },
+        ),
+        responses=[
+            APIResponse(200, "上传成功", example={
+                "success": True,
+                "content": "文件内容...",
+                "summary": "内容摘要...",
+                "filename": "document.txt",
+            }),
+            APIResponse(400, "上传失败"),
+        ],
+    ))
+
+    # 预览 API
+    openapi.register_endpoint(APIEndpoint(
+        path="/api/preview",
+        method="POST",
+        summary="预览 PPT 结构",
+        description="生成 PPT 结构预览，不生成实际文件。",
+        tags=["生成"],
+        request_body=APIRequestBody(
+            description="预览参数",
+            schema={"$ref": "#/components/schemas/GenerateRequest"},
+        ),
+        responses=[
+            APIResponse(200, "预览结果", example={
+                "success": True,
+                "title": "演示文稿标题",
+                "subtitle": "副标题",
+                "slides": [
+                    {"index": 1, "type": "title", "title": "封面"},
+                    {"index": 2, "type": "bullets", "title": "目录"},
+                ],
+            }),
+            APIResponse(400, "参数错误"),
+        ],
+    ))
+
+    # 测试连接 API
+    openapi.register_endpoint(APIEndpoint(
+        path="/api/test-connection",
+        method="POST",
+        summary="测试 API 连接",
+        description="测试 AI API 的连通性。",
+        tags=["系统"],
+        request_body=APIRequestBody(
+            description="API 配置",
+            schema={
+                "type": "object",
+                "required": ["api_key"],
+                "properties": {
+                    "api_key": {"type": "string"},
+                    "api_base": {"type": "string"},
+                    "model_name": {"type": "string"},
+                }
+            },
+            example={
+                "api_key": "sk-xxx",
+                "api_base": "https://api.openai.com/v1",
+                "model_name": "gpt-4o-mini",
+            },
+        ),
+        responses=[
+            APIResponse(200, "测试结果", example={
+                "success": True,
+                "message": "连接成功！响应时间: 500ms",
+                "response_time": 500,
+            }),
+        ],
+    ))
+
+    # 配置 API
+    openapi.register_endpoint(APIEndpoint(
+        path="/api/config",
+        method="GET",
+        summary="获取配置状态",
+        description="获取当前服务的配置状态。",
+        tags=["系统"],
+        responses=[
+            APIResponse(200, "配置状态", example={
+                "ai_configured": False,
+                "image_search_available": False,
+            }),
+        ],
+    ))
+
+    # 历史搜索 API
+    openapi.register_endpoint(APIEndpoint(
+        path="/api/history/search",
+        method="GET",
+        summary="搜索历史记录",
+        tags=["历史"],
+        parameters=[
+            APIParameter("keyword", "query", "搜索关键词"),
+            APIParameter("status", "query", "状态过滤"),
+            APIParameter("start_date", "query", "开始日期"),
+            APIParameter("end_date", "query", "结束日期"),
+            APIParameter("limit", "query", "返回数量", schema={"type": "integer", "default": 20}),
+        ],
+        responses=[
+            APIResponse(200, "搜索结果"),
+        ],
+    ))
+
+    openapi.register_endpoint(APIEndpoint(
+        path="/api/history/{record_id}",
+        method="GET",
+        summary="获取历史记录详情",
+        tags=["历史"],
+        parameters=[
+            APIParameter("record_id", "path", "记录 ID", required=True, schema={"type": "integer"}),
+        ],
+        responses=[
+            APIResponse(200, "记录详情"),
+            APIResponse(404, "记录不存在"),
+        ],
+    ))
+
+    # SSE 事件流
+    openapi.register_endpoint(APIEndpoint(
+        path="/api/events/{task_id}",
+        method="GET",
+        summary="任务进度事件流（SSE）",
+        description="通过 Server-Sent Events 实时接收任务进度更新。",
+        tags=["任务"],
+        parameters=[
+            APIParameter("task_id", "path", "任务 ID", required=True),
+        ],
+        responses=[
+            APIResponse(200, "SSE 事件流", content_type="text/event-stream"),
+        ],
+    ))
+
+    # 详细健康检查
+    openapi.register_endpoint(APIEndpoint(
+        path="/health/detailed",
+        method="GET",
+        summary="详细健康检查",
+        description="获取详细的系统健康状态，包括各组件状态和系统资源。",
+        tags=["系统"],
+        responses=[
+            APIResponse(200, "详细健康状态", example={
+                "status": "healthy",
+                "components": {
+                    "disk": {"status": "healthy", "free_gb": 50.5},
+                    "memory": {"status": "healthy", "used_percent": 45.2},
+                },
+                "system": {
+                    "python_version": "3.11.0",
+                    "platform": "linux",
+                },
+            }),
+        ],
+    ))
+
 
 # Swagger UI HTML 模板
 SWAGGER_UI_TEMPLATE = """

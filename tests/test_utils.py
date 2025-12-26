@@ -164,16 +164,14 @@ class TestSSRFProtection:
 
     def test_validate_api_url_valid(self):
         """测试有效 URL"""
-        import sys
-        sys.path.insert(0, ".")
-        from web.app import validate_api_url
+        from web.blueprints.common import validate_api_url
 
         assert validate_api_url("https://api.openai.com/v1") is True
         assert validate_api_url("https://example.com/api") is True
 
     def test_validate_api_url_localhost(self):
         """测试本地地址拦截"""
-        from web.app import validate_api_url
+        from web.blueprints.common import validate_api_url
 
         assert validate_api_url("http://localhost:8080") is False
         assert validate_api_url("http://127.0.0.1:8080") is False
@@ -181,7 +179,7 @@ class TestSSRFProtection:
 
     def test_validate_api_url_private_network(self):
         """测试内网地址拦截"""
-        from web.app import validate_api_url
+        from web.blueprints.common import validate_api_url
 
         assert validate_api_url("http://192.168.1.1/api") is False
         assert validate_api_url("http://10.0.0.1/api") is False
@@ -193,7 +191,7 @@ class TestSSRFProtection:
 
     def test_validate_api_url_invalid(self):
         """测试无效 URL"""
-        from web.app import validate_api_url
+        from web.blueprints.common import validate_api_url
 
         assert validate_api_url("") is False
         assert validate_api_url("ftp://example.com") is False
