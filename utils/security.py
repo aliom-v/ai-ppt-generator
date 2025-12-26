@@ -154,7 +154,13 @@ class RateLimitByIP:
     """基于 IP 的速率限制
 
     更细粒度的速率限制，支持不同端点不同限制。
+    增加自动清理机制防止内存泄漏。
     """
+
+    # 清理间隔（秒）
+    CLEANUP_INTERVAL = 300  # 5分钟
+    # 最大计数器数量
+    MAX_COUNTERS = 10000
 
     def __init__(
         self,
@@ -165,6 +171,7 @@ class RateLimitByIP:
         self.default_window = default_window
         self._counters: Dict[str, Dict] = {}
         self._limits: Dict[str, tuple] = {}
+        self._last_cleanup = 0.0
 
     def limit(self, requests: int, per_seconds: int):
         """限制装饰器
@@ -180,6 +187,9 @@ class RateLimitByIP:
             @wraps(f)
             def wrapper(*args, **kwargs):
                 import time
+
+                # 定期自动清理
+                self._auto_cleanup()
 
                 ip = request.remote_addr or "unknown"
                 key = f"{endpoint}:{ip}"
@@ -214,6 +224,20 @@ class RateLimitByIP:
 
             return wrapper
         return decorator
+
+    def _auto_cleanup(self):
+        """自动清理过期计数器（定期执行）"""
+        import time
+        now = time.time()
+
+        # 检查是否需要清理
+        if now - self._last_cleanup < self.CLEANUP_INTERVAL:
+            # 如果计数器数量超过阈值，强制清理
+            if len(self._counters) < self.MAX_COUNTERS:
+                return
+
+        self._last_cleanup = now
+        self.cleanup()
 
     def cleanup(self):
         """清理过期的计数器"""

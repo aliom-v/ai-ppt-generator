@@ -110,16 +110,17 @@ class GenerationCache:
         """生成缓存键
 
         使用描述的前500字符生成key，避免超长描述导致key不稳定
+        使用 SHA256 替代 MD5 以提高安全性
         """
         # 截断描述以提高缓存命中率
         desc_truncated = description[:500] if description else ""
         content = f"{topic}|{audience}|{page_count}|{desc_truncated}|{model}"
-        return hashlib.md5(content.encode()).hexdigest()[:16]
+        return hashlib.sha256(content.encode()).hexdigest()[:16]
 
     def _make_simple_key(self, topic: str, audience: str, page_count: int) -> str:
         """生成简单缓存键（用于模糊匹配）"""
         content = f"{topic.lower().strip()}|{audience.lower().strip()}|{page_count}"
-        return hashlib.md5(content.encode()).hexdigest()[:12]
+        return hashlib.sha256(content.encode()).hexdigest()[:12]
 
     def get(self, topic: str, audience: str, page_count: int,
             description: str = "", model: str = "") -> Optional[Dict[str, Any]]:

@@ -1,6 +1,7 @@
 """大模型调用封装模块 - 优化版"""
 import json
 import time
+import threading
 from typing import Dict, Any, Optional, Callable
 from openai import OpenAI, APIError, APIConnectionError, RateLimitError, AuthenticationError
 
@@ -19,6 +20,54 @@ from utils.logger import get_logger
 from utils.cache import get_cache
 
 logger = get_logger("ai_client")
+
+
+# ==================== 客户端连接池 ====================
+
+class AIClientPool:
+    """AI 客户端连接池 - 复用连接以提高性能"""
+
+    _instance = None
+    _lock = threading.Lock()
+
+    def __new__(cls):
+        if cls._instance is None:
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = super().__new__(cls)
+                    cls._instance._clients: Dict[str, OpenAI] = {}
+                    cls._instance._client_lock = threading.Lock()
+        return cls._instance
+
+    def get_client(self, config: AIConfig) -> OpenAI:
+        """获取或创建客户端（基于配置的唯一键）"""
+        # 使用 api_base_url 和 api_key 前8位作为键
+        key = f"{config.api_base_url}:{config.api_key[:8] if config.api_key else ''}"
+
+        with self._client_lock:
+            if key not in self._clients:
+                self._clients[key] = OpenAI(
+                    api_key=config.api_key,
+                    base_url=config.api_base_url,
+                    timeout=config.timeout
+                )
+                logger.debug(f"创建新的 AI 客户端: {config.api_base_url}")
+            return self._clients[key]
+
+    def close_all(self):
+        """关闭所有客户端连接"""
+        with self._client_lock:
+            for client in self._clients.values():
+                try:
+                    client.close()
+                except Exception:
+                    pass
+            self._clients.clear()
+
+
+def get_ai_client_pool() -> AIClientPool:
+    """获取全局客户端池实例"""
+    return AIClientPool()
 
 
 class AIClientError(Exception):
@@ -221,28 +270,25 @@ def _generate_ppt_plan_batched(
     progress_callback: Optional[Callable[[int, int, str], None]] = None
 ) -> Dict[str, Any]:
     """分批生成 PPT 结构"""
-    client = OpenAI(
-        api_key=config.api_key,
-        base_url=config.api_base_url,
-        timeout=config.timeout
-    )
+    # 使用连接池获取客户端
+    client = get_ai_client_pool().get_client(config)
 
     total_batches = len(batches)
     all_slides = []
     title = ""
     subtitle = ""
-    
+
     # 记录已生成的内容摘要，用于续写
     generated_summary = []
-    
+
     for batch_idx, batch_pages in enumerate(batches):
         current_batch = batch_idx + 1
-        
+
         if progress_callback:
             progress_callback(current_batch, total_batches, f"正在生成第 {current_batch}/{total_batches} 批...")
-        
+
         logger.info(f"生成第 {current_batch}/{total_batches} 批（{batch_pages} 页）...")
-        
+
         # 构建分批提示词
         if batch_idx == 0:
             # 第一批：生成开头部分
@@ -255,9 +301,9 @@ def _generate_ppt_plan_batched(
                 topic, audience, batch_pages, current_batch, total_batches,
                 generated_summary, is_last=(current_batch == total_batches)
             )
-        
+
         system_prompt = get_system_prompt()
-        
+
         try:
             content = _call_api_with_retry(
                 client=client,
@@ -267,50 +313,46 @@ def _generate_ppt_plan_batched(
                 max_retries=config.max_retries,
                 temperature=config.temperature
             )
-            
+
             cleaned_content = clean_json_response(content)
             batch_result = json.loads(cleaned_content)
-            
+
             # 提取标题（只从第一批获取）
             if batch_idx == 0:
                 title = batch_result.get("title", topic)
                 subtitle = batch_result.get("subtitle", "")
-            
+
             # 收集 slides
             batch_slides = batch_result.get("slides", [])
-            
+
             # 过滤掉 ending 页（除了最后一批）
             if current_batch < total_batches:
                 batch_slides = [s for s in batch_slides if s.get("type") != "ending"]
-            
+
             all_slides.extend(batch_slides)
-            
+
             # 记录摘要用于续写
             for slide in batch_slides:
                 slide_title = slide.get("title", "")
                 if slide_title:
                     generated_summary.append(slide_title)
-            
+
             logger.info(f"第 {current_batch} 批完成，获得 {len(batch_slides)} 页")
-            
+
         except Exception as e:
             logger.error(f"第 {current_batch} 批生成失败: {e}")
             raise
-    
+
     # 合并结果
     result = {
         "title": title,
         "subtitle": subtitle,
         "slides": all_slides
     }
-    
+
     logger.info(f"分批生成完成，共 {len(all_slides)} 页")
 
-    # 确保客户端资源被释放
-    try:
-        client.close()
-    except Exception:
-        pass
+    # 注意：使用连接池时不再手动关闭客户端
 
     return result
 
@@ -324,11 +366,8 @@ def _generate_ppt_plan_single(
     config: AIConfig
 ) -> Dict[str, Any]:
     """单批生成 PPT 结构（原有逻辑）"""
-    client = OpenAI(
-        api_key=config.api_key,
-        base_url=config.api_base_url,
-        timeout=config.timeout
-    )
+    # 使用连接池获取客户端
+    client = get_ai_client_pool().get_client(config)
 
     system_prompt = get_system_prompt()
     user_prompt = build_user_prompt(topic, audience, page_count, description, auto_page_count)
@@ -375,12 +414,7 @@ def _generate_ppt_plan_single(
         raise
     except Exception as e:
         raise AIClientError(f"生成失败: {e}")
-    finally:
-        # 确保客户端资源被释放
-        try:
-            client.close()
-        except Exception:
-            pass
+    # 注意：使用连接池时不再手动关闭客户端
 
 
 def test_api_connection(config: AIConfig) -> Dict[str, Any]:

@@ -1,19 +1,18 @@
 """统一的 PPT 构建器 - 增强版（支持更多页面类型、跨平台字体、统一样式、动画效果）"""
 import os
 import threading
-from typing import Optional, List, Dict, Tuple, NamedTuple
+from typing import Optional, List, Dict
 from dataclasses import dataclass
 from pptx import Presentation
 from pptx.util import Inches, Pt
 from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
 from pptx.enum.shapes import MSO_SHAPE
 from pptx.dml.color import RGBColor
-from pptx.shapes.base import BaseShape
 
 from core.ppt_plan import PptPlan, Slide
 from utils.logger import get_logger
 from ppt.styles import (
-    FONT_CN, FONT_EN, ColorTheme,
+    FONT_CN, ColorTheme,
     CARD_BG_COLORS, ACCENT_COLORS, GRADIENT_COLORS
 )
 
