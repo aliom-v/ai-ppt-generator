@@ -7,6 +7,16 @@ __pycache__/
 env/
 venv/
 ENV/
+
+# Windows 保留设备名称
+nul
+NUL
+con
+CON
+aux
+AUX
+prn
+PRN
 build/
 develop-eggs/
 dist/
