@@ -335,6 +335,9 @@ def _generate_ppt_plan_single(
 
     logger.info(f"生成 PPT: {topic} | 受众: {audience} | 模型: {config.model_name}")
 
+    # 初始化 content 变量，避免在异常处理中使用 locals()
+    content = ""
+
     try:
         content = _call_api_with_retry(
             client=client,
@@ -366,7 +369,7 @@ def _generate_ppt_plan_single(
         return plan_dict
 
     except json.JSONDecodeError as e:
-        error_msg = build_json_error_message(e, locals().get('content', ''))
+        error_msg = build_json_error_message(e, content)
         raise JSONParseError(error_msg)
     except AIClientError:
         raise
@@ -402,10 +405,9 @@ def test_api_connection(config: AIConfig) -> Dict[str, Any]:
     except ValueError as e:
         result["message"] = str(e)
         return result
-    
-    import time
+
     start_time = time.time()
-    
+
     try:
         client = OpenAI(
             api_key=config.api_key,

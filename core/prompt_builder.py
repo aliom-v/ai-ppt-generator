@@ -1,6 +1,5 @@
 """Prompt 模板构建模块 - 增强版（行业特定提示词、智能页面分配、逻辑连贯性）"""
-from typing import Dict, Optional, Tuple
-import re
+from typing import Dict, Optional
 
 
 # ==================== 行业特定提示词配置 ====================

@@ -1,45 +1,37 @@
 # Core dependencies
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
+flask==3.0.0
+gunicorn==21.2.0
 python-pptx==0.6.23
-python-multipart==0.0.6
+werkzeug==3.0.1
 pydantic==2.5.0
 pydantic-settings==2.1.0
 
-# AI/ML dependencies
+# AI dependencies
 openai==1.3.7
-anthropic==0.7.7
 tiktoken==0.5.2
 
 # Image processing
 Pillow==10.1.0
 requests==2.31.0
-aiohttp==3.9.1
 
-# Database and caching
+# Caching (optional, for production)
 redis==5.0.1
-sqlalchemy==2.0.23
-alembic==1.13.1
 
 # Utilities
 python-dotenv==1.0.0
 click==8.1.7
 rich==13.7.0
-typer==0.9.0
 
-# Development dependencies
-pytest==7.4.3
-pytest-asyncio==0.21.1
-black==23.11.0
-isort==5.12.0
-flake8==6.1.0
-mypy==1.7.1
-
-# Security
+# Security (optional, for API key encryption)
 cryptography==41.0.8
-passlib[bcrypt]==1.7.4
-python-jose[cryptography]==3.3.0
 
-# Monitoring and logging
+# Logging
 structlog==23.2.0
-prometheus-client==0.19.0
+
+# Development dependencies (install with: pip install -e ".[dev]")
+# pytest==7.4.3
+# pytest-asyncio==0.21.1
+# black==23.11.0
+# isort==5.12.0
+# flake8==6.1.0
+# mypy==1.7.1
