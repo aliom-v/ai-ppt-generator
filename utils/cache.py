@@ -25,7 +25,11 @@ class GenerationCache:
     - 过期清理：自动清理超过有效期的缓存
     - 访问计数：记录每个缓存条目的访问次数
     - 线程安全：支持多线程并发访问
+    - 延迟写入：减少频繁的文件 I/O
     """
+
+    # 延迟写入间隔（秒）
+    WRITE_DELAY = 5.0
 
     def __init__(
         self,
@@ -50,6 +54,8 @@ class GenerationCache:
         self._index: OrderedDict[str, Dict] = OrderedDict()
         self._lock = threading.RLock()
         self._stats = {"hits": 0, "misses": 0, "evictions": 0}
+        self._dirty = False  # 标记索引是否需要保存
+        self._last_save_time = time.time()
         self._load_index()
 
         # 启动时清理过期缓存
@@ -72,13 +78,32 @@ class GenerationCache:
                 logger.warning(f"加载缓存索引失败: {e}")
                 self._index = OrderedDict()
 
-    def _save_index(self) -> None:
-        """保存缓存索引"""
+    def _save_index(self, force: bool = False) -> None:
+        """保存缓存索引（延迟写入）
+
+        Args:
+            force: 是否强制立即保存
+        """
+        self._dirty = True
+        current_time = time.time()
+
+        # 延迟写入：只有超过间隔或强制保存时才写入
+        if not force and (current_time - self._last_save_time) < self.WRITE_DELAY:
+            return
+
         try:
             with open(self.index_file, 'w', encoding='utf-8') as f:
                 json.dump(dict(self._index), f, ensure_ascii=False, indent=2)
+            self._dirty = False
+            self._last_save_time = current_time
         except Exception as e:
             logger.warning(f"保存缓存索引失败: {e}")
+
+    def flush(self) -> None:
+        """强制保存索引到磁盘"""
+        with self._lock:
+            if self._dirty:
+                self._save_index(force=True)
 
     def _make_key(self, topic: str, audience: str, page_count: int,
                   description: str = "", model: str = "") -> str:
@@ -151,7 +176,7 @@ class GenerationCache:
                 logger.info(f"使用缓存: {topic} ({page_count}页)")
                 return data
             except Exception as e:
-                logger.warning(f"读取缓存失败: {e}")
+                logger.error(f"读取缓存失败: {e}")
                 self._remove_entry(key)
                 self._stats["misses"] += 1
                 return None
@@ -198,7 +223,7 @@ class GenerationCache:
                 self._save_index()
                 logger.debug(f"已缓存: {topic}")
             except Exception as e:
-                logger.warning(f"保存缓存失败: {e}")
+                logger.error(f"保存缓存失败: {e}")
 
     def _evict_if_needed(self) -> None:
         """如果超出容量限制，淘汰最旧的条目（LRU）"""
@@ -233,7 +258,7 @@ class GenerationCache:
             count = len(self._index)
             for key in list(self._index.keys()):
                 self._remove_entry(key, save_index=False)
-            self._save_index()
+            self._save_index(force=True)
             logger.info(f"已清空 {count} 条缓存")
             return count
 
@@ -253,7 +278,7 @@ class GenerationCache:
                     count += 1
 
             if count > 0:
-                self._save_index()
+                self._save_index(force=True)
                 logger.info(f"清理了 {count} 条过期缓存")
             return count
 

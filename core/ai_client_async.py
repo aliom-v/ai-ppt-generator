@@ -2,12 +2,19 @@
 import asyncio
 import json
 import time
-import random
 from typing import Dict, Any, Optional, Callable, List
 from openai import AsyncOpenAI, APIError, APIConnectionError, RateLimitError, AuthenticationError
 
 from config.settings import AIConfig, settings
 from core.prompt_builder import get_system_prompt, build_user_prompt
+from core.ai_common import (
+    clean_json_response,
+    calculate_backoff,
+    is_retryable_error,
+    calculate_batches,
+    build_batch_prompt_first,
+    build_batch_prompt_continue,
+)
 from utils.logger import get_logger
 from utils.cache import get_cache
 
@@ -29,39 +36,6 @@ class AsyncAIClient:
     async def close(self):
         """关闭客户端"""
         await self.client.close()
-
-
-def _clean_json_response(content: str) -> str:
-    """清理 AI 返回的 JSON 内容（与原版保持一致）"""
-    content = content.strip()
-
-    if content.startswith("```json"):
-        content = content[7:]
-    elif content.startswith("```"):
-        content = content[3:]
-    if content.endswith("```"):
-        content = content[:-3]
-    content = content.strip()
-
-    first_brace = content.find('{')
-    last_brace = content.rfind('}')
-    if first_brace != -1 and last_brace != -1 and first_brace < last_brace:
-        content = content[first_brace:last_brace + 1]
-
-    content = content.replace('"', '"').replace('"', '"')
-    content = content.replace(''', "'").replace(''', "'")
-
-    if content.startswith('\ufeff'):
-        content = content[1:]
-
-    return content
-
-
-def _calculate_backoff(attempt: int, base_delay: float = 1.0, max_delay: float = 30.0) -> float:
-    """计算指数退避延迟"""
-    delay = min(base_delay * (2 ** attempt), max_delay)
-    jitter = delay * (0.5 + random.random())
-    return min(jitter, max_delay)
 
 
 async def _call_api_with_retry_async(
@@ -156,25 +130,14 @@ async def _call_api_impl(
                 raise Exception(f"API 限流: {e}")
 
         except Exception as e:
-            if not _is_retryable_error(e) or attempt == max_retries - 1:
+            if not is_retryable_error(e) or attempt == max_retries - 1:
                 raise
             last_error = e
-            wait_time = _calculate_backoff(attempt, base_delay=1.0, max_delay=15.0)
+            wait_time = calculate_backoff(attempt, base_delay=1.0, max_delay=15.0)
             logger.warning(f"API 错误（第 {attempt + 1} 次），{wait_time:.1f} 秒后重试...")
             await asyncio.sleep(wait_time)
 
     raise Exception(f"API 调用失败: {last_error}")
-
-
-def _is_retryable_error(error: Exception) -> bool:
-    """判断错误是否可重试"""
-    if isinstance(error, AuthenticationError):
-        return False
-    if isinstance(error, APIError):
-        error_str = str(error).lower()
-        if any(x in error_str for x in ["invalid_api_key", "401", "403", "invalid_request"]):
-            return False
-    return True
 
 
 async def generate_ppt_plan_async(
@@ -201,7 +164,7 @@ async def generate_ppt_plan_async(
             return cached
 
     # 计算分批策略
-    batches = _calculate_batches(page_count) if not auto_page_count and page_count > 35 else [page_count]
+    batches = calculate_batches(page_count) if not auto_page_count and page_count > 35 else [page_count]
     total_batches = len(batches)
 
     if total_batches > 1:
@@ -330,11 +293,11 @@ async def _generate_batch_async(
 
         # 构建提示词
         if batch_idx == 0:
-            batch_prompt = _build_batch_prompt_first(
+            batch_prompt = build_batch_prompt_first(
                 topic, audience, pages, total_batches, description
             )
         else:
-            batch_prompt = _build_batch_prompt_continue(
+            batch_prompt = build_batch_prompt_continue(
                 topic, audience, pages, current_batch, total_batches,
                 generated_summary, is_last=(current_batch == total_batches)
             )
@@ -351,7 +314,7 @@ async def _generate_batch_async(
             semaphore=None  # 内部已经用semaphore限制
         )
 
-        cleaned_content = _clean_json_response(content)
+        cleaned_content = clean_json_response(content)
         batch_result = json.loads(cleaned_content)
 
         logger.info(f"第 {current_batch} 批完成")
@@ -388,77 +351,10 @@ async def _generate_ppt_plan_single_async(
             temperature=config.temperature
         )
 
-        cleaned_content = _clean_json_response(content)
+        cleaned_content = clean_json_response(content)
         plan_dict = json.loads(cleaned_content)
 
         return plan_dict
 
     finally:
         await client.close()
-
-
-def _calculate_batches(page_count: int) -> List[int]:
-    """计算分批策略（与原版保持一致）"""
-    if page_count <= 35:
-        return [page_count]
-    elif page_count <= 70:
-        half = page_count // 2
-        return [half, page_count - half]
-    elif page_count <= 100:
-        third = page_count // 3
-        return [third, third, page_count - 2 * third]
-    elif page_count <= 150:
-        return [50, 50, page_count - 100]
-    else:
-        page_count = min(page_count, 200)
-        return [50, 50, 50, page_count - 150]
-
-
-def _build_batch_prompt_first(topic: str, audience: str, pages: int, total_batches: int, description: str) -> str:
-    """构建第一批的提示词"""
-    prompt = f"""请为以下主题创作 PPT 的【开头部分】：
-
-主题：{topic}
-目标受众：{audience}
-本批页数：{pages} 页（这是第 1/{total_batches} 批，后续还会继续生成）
-
-⚠️ 重要说明：
-- 这是分批生成的第一部分，请生成 PPT 的开头内容
-- 包含：封面信息（title, subtitle）+ 前 {pages} 页内容
-- 不要生成 ending 结束页（后续批次会生成）
-- 内容要完整，为后续批次留好衔接"""
-
-    if description:
-        prompt += f"\n\n【参考资料】\n{description}"
-
-    prompt += "\n\n请生成 JSON 格式，包含 title、subtitle 和 slides 数组。"
-    return prompt
-
-
-def _build_batch_prompt_continue(topic: str, audience: str, pages: int,
-                                current_batch: int, total_batches: int,
-                                generated_summary: List[str], is_last: bool) -> str:
-    """构建续写批次的提示词"""
-    summary_text = "\n".join([f"- {t}" for t in generated_summary[-10:]])
-
-    prompt = f"""请继续生成 PPT 的【第 {current_batch} 部分】：
-
-主题：{topic}
-目标受众：{audience}
-本批页数：{pages} 页（这是第 {current_batch}/{total_batches} 批）
-
-【已生成的内容摘要】（请续写，不要重复）：
-{summary_text}
-
-⚠️ 重要说明：
-- 这是续写部分，请接着上面的内容继续
-- 不要重复已生成的内容
-- 本批生成 {pages} 页新内容"""
-
-    if is_last:
-        prompt += "\n- 这是最后一批，请在最后添加 ending 结束页"
-    else:
-        prompt += "\n- 不要生成 ending 结束页（后续批次会生成）"
-
-    prompt += "\n\n请生成 JSON 格式，只需要 slides 数组（不需要 title 和 subtitle）。"
-    return prompt

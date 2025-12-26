@@ -281,7 +281,7 @@ def build_ppt_from_plan(
     enable_animations: bool = True,
     enhance_images: bool = True,
     image_enhance_preset: str = "default"
-) -> None:
+) -> str:
     """根据 PptPlan 生成 PPTX 文件
 
     Args:
@@ -292,6 +292,9 @@ def build_ppt_from_plan(
         enable_animations: 是否启用动画效果（默认 True）
         enhance_images: 是否增强图片（默认 True）
         image_enhance_preset: 图片增强预设（default, vivid, soft, sharp, rounded, shadow）
+
+    Returns:
+        生成的 PPT 文件路径
     """
     _reset_bullets_counter()  # 重置线程安全计数器
 
@@ -360,6 +363,8 @@ def build_ppt_from_plan(
         logger.info(f"PPT 已保存: {output_path}（含 {transition_count} 个页面切换效果）")
     else:
         logger.info(f"PPT 已保存: {output_path}")
+
+    return output_path
 
 
 def _predownload_images(

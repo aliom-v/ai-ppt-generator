@@ -5,6 +5,7 @@ from flask import Flask
 
 from utils.api_response import APIResponse
 from utils.logger import get_logger
+from utils.errors import AppError, ErrorCode, ErrorCategory
 
 logger = get_logger("error_handler")
 
@@ -26,7 +27,10 @@ class ErrorHandlerMiddleware:
 
     def init_app(self, app: Flask):
         """初始化 Flask 应用"""
-        # 注册错误处理器
+        # 注册 AppError 处理器
+        app.register_error_handler(AppError, self._handle_app_error)
+
+        # 注册 HTTP 错误处理器
         app.register_error_handler(400, self._handle_400)
         app.register_error_handler(401, self._handle_401)
         app.register_error_handler(403, self._handle_403)
@@ -36,6 +40,14 @@ class ErrorHandlerMiddleware:
         app.register_error_handler(429, self._handle_429)
         app.register_error_handler(500, self._handle_500)
         app.register_error_handler(Exception, self._handle_exception)
+
+    def _handle_app_error(self, error: AppError):
+        """处理 AppError"""
+        if error.category == ErrorCategory.INTERNAL:
+            logger.error(f"[{error.code.value}] {error.message}", exc_info=error.original_error)
+        else:
+            logger.warning(f"[{error.code.value}] {error.message}")
+        return error.to_response()
 
     def _handle_400(self, error):
         """处理 400 错误"""

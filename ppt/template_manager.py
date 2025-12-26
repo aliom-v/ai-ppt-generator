@@ -1,36 +1,74 @@
 """PPT 模板管理器"""
 import os
+import threading
+import time
 from typing import List, Dict, Optional
 from pathlib import Path
 
 
 class TemplateManager:
-    """模板管理器 - 管理和提供 PPT 模板"""
-    
+    """模板管理器 - 管理和提供 PPT 模板
+
+    特性：
+    - 模板列表缓存，避免频繁扫描文件系统
+    - 线程安全
+    """
+
+    # 缓存有效期（秒）
+    CACHE_TTL = 300  # 5分钟
+
     def __init__(self, templates_dir: str = "ppt/pptx_templates"):
         """初始化模板管理器
-        
+
         Args:
             templates_dir: 模板文件夹路径
         """
         self.templates_dir = templates_dir
+        self._templates_cache: Optional[List[Dict[str, str]]] = None
+        self._cache_time: float = 0
+        self._lock = threading.RLock()
         self._ensure_templates_dir()
-    
+
     def _ensure_templates_dir(self):
         """确保模板目录存在"""
         Path(self.templates_dir).mkdir(parents=True, exist_ok=True)
-    
+
+    def _is_cache_valid(self) -> bool:
+        """检查缓存是否有效"""
+        if self._templates_cache is None:
+            return False
+        return (time.time() - self._cache_time) < self.CACHE_TTL
+
+    def invalidate_cache(self):
+        """使缓存失效"""
+        with self._lock:
+            self._templates_cache = None
+            self._cache_time = 0
+
     def list_templates(self) -> List[Dict[str, str]]:
-        """列出所有可用模板
-        
+        """列出所有可用模板（带缓存）
+
         Returns:
             模板列表，每个模板包含 id, name, path, category, description
         """
+        with self._lock:
+            # 检查缓存
+            if self._is_cache_valid():
+                return self._templates_cache
+
+            # 重新扫描
+            templates = self._scan_templates()
+            self._templates_cache = templates
+            self._cache_time = time.time()
+            return templates
+
+    def _scan_templates(self) -> List[Dict[str, str]]:
+        """扫描模板目录"""
         templates = []
-        
+
         if not os.path.exists(self.templates_dir):
             return templates
-        
+
         # 扫描模板文件夹
         for root, dirs, files in os.walk(self.templates_dir):
             for file in files:
@@ -38,7 +76,7 @@ class TemplateManager:
                     template_path = os.path.join(root, file)
                     template_info = self._get_template_info(template_path)
                     templates.append(template_info)
-        
+
         return templates
     
     # 默认模板ID
