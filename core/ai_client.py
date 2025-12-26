@@ -109,33 +109,44 @@ def _call_api_with_retry(
     - 指数退避 + 随机抖动
     - 区分可重试/不可重试错误
     - 自动解析 Retry-After 响应头
+    - 兼容 OpenAI 和 Claude（通过兼容层如 OpenRouter）
     """
-    is_claude = "claude" in model_name.lower()
+    model_lower = model_name.lower()
+    is_claude = "claude" in model_lower
+    is_o1 = model_lower.startswith("o1")  # OpenAI o1 系列不支持 system role
     last_error = None
 
     for attempt in range(max_retries):
         try:
-            if is_claude:
-                # Claude 模型：合并 system 和 user prompt
-                combined_prompt = f"{system_prompt}\n\n{user_prompt}"
-                response = client.chat.completions.create(
-                    model=model_name,
-                    messages=[{"role": "user", "content": combined_prompt}],
-                    temperature=temperature,
-                    max_tokens=8192
-                )
+            # 构建消息列表
+            if is_o1:
+                # o1 系列：不支持 system role，合并到 user 消息
+                messages = [
+                    {"role": "user", "content": f"{system_prompt}\n\n{user_prompt}"}
+                ]
             else:
-                # OpenAI 模型：使用标准格式
-                response = client.chat.completions.create(
-                    model=model_name,
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt}
-                    ],
-                    temperature=temperature,
-                    max_tokens=8192,
-                    response_format={"type": "json_object"}
-                )
+                # OpenAI GPT 系列和 Claude（通过兼容层）：使用标准格式
+                messages = [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ]
+
+            # 构建请求参数
+            request_params = {
+                "model": model_name,
+                "messages": messages,
+                "max_tokens": 8192,
+            }
+
+            # 温度参数（o1 系列不支持）
+            if not is_o1:
+                request_params["temperature"] = temperature
+
+            # JSON 模式（Claude 和 o1 不支持 response_format）
+            if not is_claude and not is_o1:
+                request_params["response_format"] = {"type": "json_object"}
+
+            response = client.chat.completions.create(**request_params)
 
             # 提取响应内容
             content = None
